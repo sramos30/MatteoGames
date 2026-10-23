@@ -7,7 +7,7 @@ import com.example.matteogames.framework.*
 
 /**
  * Big digit + that many objects, spoken from Literki's digits (d0..d9, "digitos.nome").
- * Literki has no 10, so the game goes 0..9. Arrows wait for the audio.
+ * 10 has no digit: it is the Literki word n.10 (Ids.TEN = w143). Range 0..10, arrows wrap around and wait for the audio.
  */
 class NumbersMiniGame : MiniGame {
     override val info = MiniGameInfo("numbers", R.string.game_numbers, "🔢", intArrayOf(Pal.Grape, Pal.SkyBlue))
@@ -15,11 +15,11 @@ class NumbersMiniGame : MiniGame {
     override fun createView(services: GameServices, onExit: () -> Unit): View {
         val ctx = services.activity
         val objects = listOf("⚽", "⚡", "🐶", "⭐", "🍎")
-        val digits = (services.lang.lang?.digits?.keys ?: (0..9).toSet()).filter { it in 0..9 }.sorted().ifEmpty { listOf(0) }
+        val digits = (services.lang.lang?.digits?.keys ?: (0..9).toSet()).filter { it in 0..9 }.sorted().ifEmpty { listOf(0) } + 10
         var n = services.settings.numbersCurrent.let { if (it in digits) it else digits.first() }
-        fun id() = "d$n"
+        fun id() = if (n == 10) Ids.TEN else services.lang.lang?.digits?.get(n)?.id ?: "d$n"
         lateinit var name: KidButton; lateinit var big: KidButton
-        fun refreshName() { name.label = services.text(id()) }
+        fun refreshName() { name.label = services.text(id()).ifBlank { if (n == 10) "10" else "" } }
         return ctx.kidScreen(0xFFEDE7FF.toInt(), 0xFFEAF2FF.toInt(), onExit, right = { bar ->
             bar.add(ctx.langButton(services, 56, { id() }) { l -> refreshName(); services.voice.say(l to id()) })
         }) { content, _, _ ->
@@ -51,8 +51,7 @@ class NumbersMiniGame : MiniGame {
             }
             fun go(delta: Int) {
                 if (services.voice.speaking) return
-                val i = digits.indexOf(n) + delta
-                if (i !in digits.indices) return
+                val i = Math.floorMod(digits.indexOf(n) + delta, digits.size)
                 n = digits[i]
                 services.settings.numbersCurrent = n
                 render()

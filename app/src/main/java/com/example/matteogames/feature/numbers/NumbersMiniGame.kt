@@ -23,14 +23,20 @@ class NumbersMiniGame : MiniGame {
         return ctx.kidScreen(0xFFEDE7FF.toInt(), 0xFFEAF2FF.toInt(), onExit, right = { bar ->
             bar.add(ctx.langButton(services, 56, { id() }) { l -> refreshName(); services.voice.say(l to id()) })
         }) { content, _, _ ->
+            val row = ctx.hbox()
+            content.add(row, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            val left = ctx.vbox(android.view.Gravity.CENTER)
+            row.add(left, 0, ctx.u(230), ViewGroup.LayoutParams.MATCH_PARENT)
             big = ctx.kidButton(150, { labelSizeFrac = 0.62f; cornerDp = 32f }) { services.sayWord(id()) }
-            content.add(big)
-            name = ctx.fitLabel("", 320, 50)
-            content.add(name)
+            left.add(big)
+            name = ctx.fitLabel("", 220, 48)
+            left.add(name)
+            val right = ctx.vbox(android.view.Gravity.CENTER)
+            row.add(right, 0, ctx.u(300), ViewGroup.LayoutParams.MATCH_PARENT)
             val objs = ctx.vbox(android.view.Gravity.CENTER)
-            content.add(objs, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(170))
+            right.add(objs, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(150))
             val arrows = ctx.hbox()
-            content.add(arrows, 6)
+            right.add(arrows, 6)
 
             fun render() {
                 big.label = "$n"
@@ -38,9 +44,9 @@ class NumbersMiniGame : MiniGame {
                 objs.removeAllViews()
                 val e = objects[(n + objects.size - 1) % objects.size]
                 (1..n).toList().chunked(5).forEach { items ->
-                    val row = ctx.hbox()
-                    items.forEach { row.add(ctx.emojiView(e, 46), 4) }
-                    objs.add(row)
+                    val r = ctx.hbox()
+                    items.forEach { r.add(ctx.emojiView(e, 46), 4) }
+                    objs.add(r)
                 }
             }
             fun go(delta: Int) {
@@ -52,8 +58,8 @@ class NumbersMiniGame : MiniGame {
                 render()
                 services.sayWord(id())
             }
-            val prev = ctx.circleButton(84, arrow = Arrow.LEFT) { go(-1) }
-            val next = ctx.circleButton(84, arrow = Arrow.RIGHT) { go(+1) }
+            val prev = ctx.circleButton(80, arrow = Arrow.LEFT) { go(-1) }
+            val next = ctx.circleButton(80, arrow = Arrow.RIGHT) { go(+1) }
             arrows.add(prev, 14); arrows.add(next, 14)
             services.voice.onSpeakingChanged = { s ->
                 val f = if (s) Pal.Disabled else 0xFFFFFFFF.toInt()

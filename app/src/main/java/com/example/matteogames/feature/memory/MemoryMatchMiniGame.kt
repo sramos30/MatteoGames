@@ -35,7 +35,7 @@ class MemoryMatchMiniGame : MiniGame {
             }
             bar.add(ctx.flex())
             bar.add(ctx.langButton(services, 56, { null }) { l -> services.voice.say(l to "p.lang") })
-        }) { content, root, _ ->
+        }) { content, root, hU ->
             var deck: List<MCard> = emptyList()
             var first: MCard? = null
             var busy = false
@@ -71,10 +71,20 @@ class MemoryMatchMiniGame : MiniGame {
                 pairButtons.forEach { (p, b) -> b.fill = if (p == pairs) Pal.Sunshine else 0xFFFFFFFF.toInt()
                     b.labelColor = if (p == pairs) 0xFFFFFFFF.toInt() else Pal.Ink }
                 grid.removeAllViews()
-                deck.chunked(3).forEach { rc ->
+                // pick the column count that gives the biggest cards in the measured area
+                val wU = root.width / Ui.u - 2 * Ui.SIDE
+                val n = deck.size
+                var cols = 2; var size = 0f
+                for (c in 2..n) {
+                    val rows = (n + c - 1) / c
+                    val s = minOf(wU / c, hU / rows) - 12f
+                    if (s > size) { size = s; cols = c }
+                }
+                val cardU = size.coerceIn(60f, 130f).toInt()
+                deck.chunked(cols).forEach { rc ->
                     val row = ctx.hbox()
                     rc.forEach { card ->
-                        card.view = ctx.kidButton(100, { cornerDp = 18f }) { onTap(card) }
+                        card.view = ctx.kidButton(cardU, { cornerDp = 18f }) { onTap(card) }
                         card.refresh()
                         row.add(card.view, 6)
                     }

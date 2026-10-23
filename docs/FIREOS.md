@@ -26,3 +26,8 @@ O Literki precisa estar instalado ANTES do MatteoGames (a permissão só é conc
 - **Pacote**: `com.literki.matteogames`, assinado com a chave do Literki (igual ao `literki-app/app/build.gradle`).
 - **Conteúdo do Literki** (`core/Literki.kt`): lê `/lista`, `/linguas` e `/arquivo` do provedor `com.literki.app.pacotes` com a permissão `com.literki.app.permission.LER_PACOTES` (contrato em `literki-app/docs/PROVEDOR-PACOTES.md`). Botão de língua igual ao `cycleLang`: pula para a próxima língua que tem o item, ou treme e apita; a escolha fica salva. O que falta está em [CONTEUDO-FALTANTE.md](CONTEUDO-FALTANTE.md).
 - **Quebra-cabeça**: importar foto pelo seletor do sistema, com portão dos pais.
+
+## Orientação
+
+Todas as telas são só paisagem (`sensorLandscape`, igual ao literki-app). O layout usa uma grade virtual de 640x360 unidades (`Ui.u`) calculada a partir da largura/altura medidas, com margem lateral de `Ui.SIDE` (28u) livre para os futuros controles laterais. No quebra-cabeça a bandeja de peças fica ao lado do tabuleiro.
+

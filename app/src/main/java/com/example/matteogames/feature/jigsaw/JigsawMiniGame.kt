@@ -60,10 +60,27 @@ private class BoardView(context: Context) : View(context) {
     private fun layoutPieces() {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0 || h <= 0 || pieces.isEmpty()) return
-        boardSize = minOf(w * 0.92f, h * 0.55f)
+        val land = w > h
+        if (land) {
+            // landscape: board on the left, tray beside it on the right
+            // landscape: shrink the board until every loose piece fits in the side tray without overlap
+            boardLeft = w * 0.02f
+            boardSize = minOf(h * 0.96f, w * 0.55f)
+            while (boardSize > h * 0.4f) {
+                val c = boardSize / grid
+                val trayW = w - boardLeft - boardSize - c * 0.25f
+                val fitCols = (trayW / (c * 1.06f)).toInt()
+                val fitRows = (h / (c * 1.06f)).toInt()
+                if (fitCols * fitRows >= grid * grid) break
+                boardSize *= 0.96f
+            }
+            boardTop = (h - boardSize) / 2f
+        } else {
+            boardSize = minOf(w * 0.92f, h * 0.55f)
+            boardLeft = (w - boardSize) / 2f
+            boardTop = h * 0.02f
+        }
         cell = boardSize / grid
-        boardLeft = (w - boardSize) / 2f
-        boardTop = h * 0.02f
         if (laidOut) return
         val rnd = Random(42)
         val trayTop = boardTop + boardSize + cell * 0.15f
@@ -74,16 +91,25 @@ private class BoardView(context: Context) : View(context) {
                 pc.x = boardLeft + pc.col * cell; pc.y = boardTop + pc.row * cell; pc.placed = true
             } else loose.add(pc)
         }
-        // tray: shuffled tidy grid inside the view; rows overlap only when space is short
+        // tray: shuffled tidy grid; rows overlap only when space is short
         loose.shuffle(rnd)
-        val perRow = maxOf(1, ((w * 0.96f) / (cell * 1.04f)).toInt())
+        val tx0 = if (land) boardLeft + boardSize + cell * 0.25f else 0f
+        val tx1 = w
+        val ty0 = if (land) 0f else trayTop
+        val ty1 = if (land) h - cell else trayBottom
+        val tw = tx1 - tx0
+        val perRow = maxOf(1, minOf(loose.size, (tw / (cell * 1.06f)).toInt()))
         val rows = (loose.size + perRow - 1) / perRow
-        val stepX = if (perRow > 1) (w - cell * 1.1f) / (perRow - 1) else 0f
-        val stepY = if (rows > 1) minOf(cell * 1.04f, (trayBottom - trayTop) / (rows - 1)) else 0f
+        val stepX = if (perRow > 1) minOf(cell * 1.1f, (tw - cell) / (perRow - 1)) else 0f
+        val usedW = cell + stepX * (perRow - 1)
+        val stepY = if (rows > 1) minOf(cell * 1.06f, (ty1 - ty0) / (rows - 1)) else 0f
+        val usedH = cell + stepY * (rows - 1)
+        val x0 = tx0 + (tw - usedW) / 2f
+        val y0 = ty0 + if (land) ((h - usedH) / 2f - ty0).coerceAtLeast(0f) else 0f
         loose.forEachIndexed { i, pc ->
             val col = i % perRow; val row = i / perRow
-            pc.x = (if (perRow > 1) cell * 0.05f + col * stepX else (w - cell) / 2f) + (row % 2) * cell * 0.08f
-            pc.y = trayTop + row * stepY
+            pc.x = x0 + col * stepX
+            pc.y = y0 + row * stepY
             pc.x = pc.x.coerceIn(0f, (w - cell).coerceAtLeast(0f)); pc.y = pc.y.coerceIn(0f, (h - cell).coerceAtLeast(0f))
         }
         restore = null
@@ -165,6 +191,7 @@ class JigsawMiniGame : MiniGame {
         var pictureId: String? = null
         val gridButtons = ArrayList<Pair<Int, KidButton>>()
         lateinit var galleryBtn: KidButton
+        lateinit var word: KidButton
         lateinit var openGallery: () -> Unit
         lateinit var board: BoardView
         lateinit var refreshChip: () -> Unit
@@ -183,6 +210,11 @@ class JigsawMiniGame : MiniGame {
                 bar.add(b, 3)
             }
             bar.add(ctx.flex())
+            bar.add(ctx.langButton(services, 50, { pictureId }) { _ -> refreshChip(); services.sayWord(pictureId) }, 3)
+            word = ctx.kidButton(50, { cornerDp = 18f; labelColor = Pal.Ink; labelSizeFrac = 0.6f }) {
+                services.sayWord(pictureId)
+            }
+            bar.addView(word, LinearLayout.LayoutParams(ctx.u(170), ctx.u(50)).apply { setMargins(ctx.u(6), 0, ctx.u(6), 0) })
             galleryBtn = ctx.circleButton(50, "🖼️") { openGallery() }
             bar.add(galleryBtn, 3)
             bar.add(ctx.circleButton(50, "📷") {
@@ -196,15 +228,6 @@ class JigsawMiniGame : MiniGame {
             }, 3)
         }) { col, root, _ ->
             board = BoardView(ctx)
-            // word chip: [language] WORD  (tap = hear it)
-            val chipRow = ctx.hbox(Gravity.CENTER_VERTICAL)
-            chipRow.setPadding(ctx.u(10), 0, ctx.u(10), 0)
-            val word = ctx.kidButton(50, { cornerDp = 18f; labelColor = Pal.Ink; labelSizeFrac = 0.6f }) {
-                services.sayWord(pictureId)
-            }
-            chipRow.add(ctx.langButton(services, 50, { pictureId }) { _ -> refreshChip(); services.sayWord(pictureId) }, 3)
-            chipRow.addView(word, LinearLayout.LayoutParams(0, ctx.u(50), 1f).apply { setMargins(ctx.u(6), 0, 0, 0) })
-            col.add(chipRow, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(60))
             col.addView(board, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
             refreshChip = {
@@ -236,20 +259,21 @@ class JigsawMiniGame : MiniGame {
                 val oc = ctx.vbox()
                 overlay.add(oc, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 val head = ctx.hbox(Gravity.CENTER_VERTICAL)
-                head.setPadding(ctx.u(10), ctx.u(8), ctx.u(10), ctx.u(4))
+                head.setPadding(ctx.u(Ui.SIDE), ctx.u(6), ctx.u(Ui.SIDE), ctx.u(2))
                 head.add(ctx.emojiView("🖼️", 48))
                 head.add(ctx.flex())
                 head.add(ctx.circleButton(56, arrow = Arrow.CLOSE) { root.removeView(overlay) })
-                oc.add(head, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(70))
+                oc.add(head, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(64))
                 val completed = settings.completedPictures
                 val gv = GridView(ctx)
-                val cols = 3
-                val cell = ctx.u(104)
+                val cell = ctx.u(100)
+                val cols = maxOf(3, (root.width - ctx.u(2 * Ui.SIDE)) / (cell + ctx.u(10)))
                 gv.numColumns = cols
                 gv.stretchMode = GridView.STRETCH_SPACING_UNIFORM
                 gv.columnWidth = cell
                 gv.verticalSpacing = ctx.u(8)
-                gv.setPadding(ctx.u(6), ctx.u(4), ctx.u(6), ctx.u(8))
+                gv.setPadding(ctx.u(Ui.SIDE), ctx.u(4), ctx.u(Ui.SIDE), ctx.u(8))
+                gv.clipToPadding = false
                 gv.adapter = object : BaseAdapter() {
                     override fun getCount() = pics.size
                     override fun getItem(position: Int) = pics[position]

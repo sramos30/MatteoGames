@@ -35,11 +35,17 @@ object Pal {
 }
 
 /**
- * Responsive sizing. Every screen is laid out on a virtual 360 x 640 unit board; the real
+ * Responsive sizing. Every screen is laid out on a virtual 640 x 360 unit board (landscape;
+ * 360 x 640 if a window is ever portrait); the real
  * pixels per unit come from the size measured in onSizeChanged (see [sizedScreen]), so the
  * layout always fits whatever the window gives us (status bar, nav bar, Fire Phone...).
  */
-object Ui { @JvmStatic var u = 2f }
+object Ui {
+    @JvmStatic var u = 2f
+    /** Horizontal inset (units) kept free at the left/right edges for the future side controls. */
+    const val SIDE = 28
+    fun measure(w: Int, h: Int) { u = if (w >= h) minOf(w / 640f, h / 360f) else minOf(w / 360f, h / 640f) }
+}
 fun Context.u(v: Number): Int = (v.toFloat() * Ui.u + 0.5f).toInt()
 fun Context.uf(v: Number): Float = v.toFloat() * Ui.u
 
@@ -52,7 +58,7 @@ class SizedScreen(context: Context, private val build: (FrameLayout, Int, Int) -
         builtW = w; builtH = h
         post {
             removeAllViews()
-            Ui.u = minOf(w / 360f, h / 640f)
+            Ui.measure(w, h)
             build(this, w, h)
         }
     }
@@ -265,12 +271,13 @@ fun Context.kidScreen(top: Int, bottom: Int, onExit: () -> Unit, right: (LinearL
         val col = vbox()
         root.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         val bar = hbox(Gravity.CENTER_VERTICAL)
-        bar.setPadding(u(10), u(8), u(10), u(4))
-        bar.add(circleButton(56, arrow = Arrow.LEFT) { onExit() })
+        bar.setPadding(u(Ui.SIDE), u(6), u(Ui.SIDE), u(2))
+        bar.add(circleButton(54, arrow = Arrow.LEFT) { onExit() })
         bar.add(flex())
         right(bar)
-        col.add(bar, 0, ViewGroup.LayoutParams.MATCH_PARENT, u(70))
+        col.add(bar, 0, ViewGroup.LayoutParams.MATCH_PARENT, u(64))
         val content = vbox(Gravity.CENTER)
+        content.setPadding(u(Ui.SIDE), 0, u(Ui.SIDE), u(4))
         col.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        build(content, root, h / Ui.u - 70f)
+        build(content, root, h / Ui.u - 68f)
     }

@@ -1,6 +1,7 @@
 package com.example.matteogames.feature.letters
 
 import android.view.View
+import android.view.ViewGroup
 import com.example.matteogames.R
 import com.example.matteogames.core.Literki
 import com.example.matteogames.framework.*
@@ -22,16 +23,14 @@ class LettersMiniGame : MiniGame {
                 refresh(true)
             })
         }) { content, _, _ ->
+            val row = ctx.hbox()
+            content.add(row, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             val big = ctx.kidButton(150, { labelSizeFrac = 0.5f; cornerDp = 32f }) { refresh(true) }
-            content.add(big)
-            content.add(ctx.spacer(8))
-            val pic = ctx.emojiView(null, 120)
-            content.add(pic)
-            val word = ctx.fitLabel("", 330, 52)
-            content.add(word)
-            val arrows = ctx.hbox()
-            content.add(arrows, 6)
-
+            val ex = ctx.vbox(android.view.Gravity.CENTER)
+            val pic = ctx.emojiView(null, 130)
+            ex.add(pic)
+            val word = ctx.fitLabel("", 240, 48)
+            ex.add(word)
             refresh = { speak ->
                 val lang = services.lang.lang
                 val l = cur()
@@ -44,12 +43,14 @@ class LettersMiniGame : MiniGame {
                     if (speak) services.voice.say(lang to l.id, lang to ex)
                 }
             }
-            arrows.add(ctx.circleButton(84, arrow = Arrow.LEFT) {
+            row.add(ctx.circleButton(76, arrow = Arrow.LEFT) {
                 val n = letters().size; if (n > 0) { pos = (pos - 1 + n) % n; refresh(true) }
-            }, 14)
-            arrows.add(ctx.circleButton(84, arrow = Arrow.RIGHT) {
+            }, 10)
+            row.add(big, 10)
+            row.add(ex, 0, ctx.u(250), ViewGroup.LayoutParams.WRAP_CONTENT)
+            row.add(ctx.circleButton(76, arrow = Arrow.RIGHT) {
                 val n = letters().size; if (n > 0) { pos = (pos + 1) % n; refresh(true) }
-            }, 14)
+            }, 10)
             refresh(true)
         }
     }

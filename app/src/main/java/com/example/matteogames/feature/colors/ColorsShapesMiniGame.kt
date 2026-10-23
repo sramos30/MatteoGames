@@ -86,13 +86,17 @@ class ColorsShapesMiniGame : MiniGame {
                     b.invalidate()
                 }
             }
-            content.add(sample, 8)
+            val main = ctx.hbox()
+            content.add(main)
+            main.add(sample, 16)
+            val grid = ctx.vbox()
+            main.add(grid)
             for (r in 0..1) {
                 val row = ctx.hbox()
                 for (c in 0..1) {
                     val index = r * 2 + c
                     lateinit var b: KidButton
-                    b = ctx.kidButton(150) {
+                    b = ctx.kidButton(128) {
                         if (busy) return@kidButton
                         if (index == round.correctIndex) {
                             busy = true
@@ -104,9 +108,9 @@ class ColorsShapesMiniGame : MiniGame {
                             services.tryAgain()
                         }
                     }
-                    tiles.add(b); row.add(b, 8)
+                    tiles.add(b); row.add(b, 6)
                 }
-                content.add(row)
+                grid.add(row)
             }
             bind()
         }

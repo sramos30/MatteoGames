@@ -27,23 +27,25 @@ class CountingMiniGame : MiniGame {
             bar.add(ctx.langButton(services, 56, { "p.ok" }) { l -> services.voice.say(l to "p.lang") })
         }) { content, root, _ ->
             var busy = false
+            val row = ctx.hbox()
+            content.add(row, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             val objects = ctx.vbox(Gravity.CENTER)
-            content.add(objects, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(300))
-            content.add(ctx.spacer(20))
-            val choicesRow = ctx.hbox()
-            content.add(choicesRow)
+            row.add(objects, 0, ctx.u(300), ViewGroup.LayoutParams.MATCH_PARENT)
+            row.add(android.view.View(ctx), 0, ctx.u(40), 1)
+            val choicesRow = ctx.vbox(Gravity.CENTER)
+            row.add(choicesRow, 0, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
             fun render(round: CountRound) {
                 objects.removeAllViews()
                 (1..round.n).toList().chunked(3).forEach { items ->
-                    val row = ctx.hbox()
-                    items.forEach { row.add(ctx.emojiView(round.emoji, 84), 6) }
-                    objects.add(row)
+                    val r = ctx.hbox()
+                    items.forEach { r.add(ctx.emojiView(round.emoji, 74), 4) }
+                    objects.add(r)
                 }
                 choicesRow.removeAllViews()
                 round.choices.forEach { choice ->
                     lateinit var b: KidButton
-                    b = ctx.kidButton(100, { label = "$choice"; labelSizeFrac = 0.6f; cornerDp = 28f }) {
+                    b = ctx.kidButton(82, { label = "$choice"; labelSizeFrac = 0.6f; cornerDp = 28f }) {
                         if (busy) return@kidButton
                         if (choice == round.n) {
                             busy = true
@@ -55,7 +57,7 @@ class CountingMiniGame : MiniGame {
                             services.tryAgain()
                         }
                     }
-                    choicesRow.add(b, 8)
+                    choicesRow.add(b, 6)
                 }
             }
             render(newRound(max))

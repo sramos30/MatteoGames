@@ -26,9 +26,13 @@ class FindItMiniGame : MiniGame {
         return ctx.kidScreen(0xFFE6FBF3.toInt(), 0xFFEAF7EA.toInt(), onExit, right = { bar ->
             bar.add(ctx.langButton(services, 56, { round?.target?.id }) { _ -> services.sayWord(round?.target?.id) })
         }) { content, root, _ ->
-            content.add(ctx.kidButton(100, { emoji = "🔊"; emojiFrac = 0.55f; cornerDp = 30f }) {
+            val main = ctx.hbox()
+            content.add(main)
+            main.add(ctx.kidButton(100, { emoji = "🔊"; emojiFrac = 0.55f; cornerDp = 30f }) {
                 services.sayWord(round?.target?.id)
-            }, 8)
+            }, 16)
+            val grid = ctx.vbox()
+            main.add(grid)
             val tiles = ArrayList<KidButton>()
             var busy = false
             fun show() { round?.let { r -> tiles.forEachIndexed { i, t -> t.picture = r.options[i] } } }
@@ -37,7 +41,7 @@ class FindItMiniGame : MiniGame {
                 for (c in 0..1) {
                     val index = rr * 2 + c
                     lateinit var b: KidButton
-                    b = ctx.kidButton(155, { emojiFrac = 0.7f }) {
+                    b = ctx.kidButton(128, { emojiFrac = 0.72f }) {
                         val r = round ?: return@kidButton
                         if (busy) return@kidButton
                         if (index == r.correctIndex) {
@@ -54,9 +58,9 @@ class FindItMiniGame : MiniGame {
                         }
                     }
                     tiles.add(b)
-                    row.add(b, 8)
+                    row.add(b, 6)
                 }
-                content.add(row)
+                grid.add(row)
             }
             show()
             services.sayWord(round?.target?.id)

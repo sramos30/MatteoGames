@@ -6,25 +6,25 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 
-/** Home: title + language button + a 2x4 grid of game cards that always fits the screen. */
+/** Home: title + language button + a 4x2 grid (landscape) of game cards that always fits the screen. */
 fun homeView(services: GameServices, onSelect: (String) -> Unit): View = with(services.activity) {
     val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
     sizedScreen(Pal.SkyTop, Pal.SkyBottom) { root, _, _ ->
         val col = vbox()
-        col.setPadding(u(8), u(8), u(8), u(4))
+        col.setPadding(u(Ui.SIDE), u(4), u(Ui.SIDE), u(2))
         root.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
         val head = hbox(Gravity.CENTER_VERTICAL)
-        head.add(emojiView("🌈", 56), 4)
-        head.addView(fitLabel("Matteo Games", -1, 52), LinearLayout.LayoutParams(0, u(52), 1f))
+        head.add(emojiView("🌈", 50), 4)
+        head.addView(fitLabel("Matteo Games", -1, 44), LinearLayout.LayoutParams(0, u(44), 1f))
         lateinit var lb: KidButton
-        lb = langButton(services, 56, { "p.lang" }) { l -> services.voice.say(l to "p.lang") }
+        lb = langButton(services, 52, { "p.lang" }) { l -> services.voice.say(l to "p.lang") }
         head.add(lb, 4)
-        col.add(head, 0, ViewGroup.LayoutParams.MATCH_PARENT, u(72))
+        col.add(head, 0, ViewGroup.LayoutParams.MATCH_PARENT, u(60))
 
         val grid = vbox()
         col.addView(grid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        MiniGameRegistry.games.chunked(2).forEach { pair ->
+        MiniGameRegistry.games.chunked(4).forEach { pair ->
             val row = hbox()
             grid.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             pair.forEach { g ->
@@ -32,32 +32,35 @@ fun homeView(services: GameServices, onSelect: (String) -> Unit): View = with(se
                     gradient = g.info.gradient
                     cornerDp = 24f
                     emoji = g.info.emoji
-                    emojiFrac = 0.62f
+                    emojiFrac = 0.58f
                     caption = getString(g.info.titleRes)
                     setOnClickListener { onSelect(g.info.id) }
                 }
                 row.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
-                    setMargins(u(6), u(6), u(6), u(6))
+                    setMargins(u(5), u(5), u(5), u(5))
                 })
             }
         }
-        col.add(fitLabel("v$version - Literki - Noto Emoji (Apache 2.0)", -1, 18, 0x88000000.toInt()))
+        col.add(fitLabel("v$version - Literki - Noto Emoji (Apache 2.0)", -1, 16, 0x88000000.toInt()))
     }
 }
 
 /** Friendly full-screen message (loading, Literki missing, permission denied). */
 fun messageView(ctx: Context, emoji: String, title: String, msg: String, onRetry: (() -> Unit)?): View = with(ctx) {
     sizedScreen(Pal.SkyTop, Pal.SkyBottom) { root, _, _ ->
+        // landscape: picture on the left, text + retry on the right
+        val row = hbox(Gravity.CENTER)
+        row.setPadding(u(Ui.SIDE + 12), u(16), u(Ui.SIDE + 12), u(16))
+        root.add(row, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        row.add(emojiView(emoji, 150), 10)
         val col = vbox(Gravity.CENTER)
-        col.setPadding(u(20), u(20), u(20), u(20))
-        root.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        col.add(emojiView(emoji, 150))
-        col.add(fitLabel(title, -1, 64))
+        row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+        col.add(fitLabel(title, -1, 60))
         // message may be long: split into lines that each auto-fit
-        wrap(msg, 26).forEach { col.add(fitLabel(it, -1, 34, Pal.Ink)) }
+        wrap(msg, 30).forEach { col.add(fitLabel(it, -1, 34, Pal.Ink)) }
         if (onRetry != null) {
-            col.add(spacer(20))
-            col.add(circleButton(96, arrow = Arrow.RIGHT, fill = Pal.Sunshine) { onRetry() })
+            col.add(spacer(14))
+            col.add(circleButton(84, arrow = Arrow.RIGHT, fill = Pal.Sunshine) { onRetry() })
         }
     }
 }

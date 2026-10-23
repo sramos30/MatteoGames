@@ -72,6 +72,15 @@ class MainActivity : Activity() {
         else if (inGame) showHome() else super.onBackPressed()
     }
 
+    /**
+     * Back from Literki (house button, kiosk Apps screen): re-read the packages and rebuild Home so the
+     * language button shows the saved choice, never a stale label or a fallback from a reload in progress.
+     */
+    override fun onRestart() {
+        super.onRestart()
+        if (!inGame) loadCatalog()
+    }
+
     override fun onStop() {
         super.onStop()
         services.voice.stop()

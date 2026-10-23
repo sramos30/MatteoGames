@@ -17,8 +17,13 @@ fun homeView(services: GameServices, onSelect: (String) -> Unit): View = with(se
         val head = hbox(Gravity.CENTER_VERTICAL)
         head.add(emojiView("🌈", 50), 4)
         head.addView(fitLabel("Matteo Games", -1, 44), LinearLayout.LayoutParams(0, u(44), 1f))
+        val cards = ArrayList<KidButton>()
         lateinit var lb: KidButton
-        lb = langButton(services, 52, { "p.lang" }) { l -> services.voice.say(l to "p.lang") }
+        lb = langButton(services, 52, { "p.lang" }) { l ->
+            services.voice.say(l to "p.lang")
+            // titles follow the language
+            cards.forEach { it.caption = services.text(titlePrompt(it.tag as String)); it.invalidate() }
+        }
         // house: hold 1.5 s to go back to Literki (a short tap only wiggles)
         val home = HoldButton(this, 1500L) { exitToLiterki(services.activity) }
         home.arrow = Arrow.HOME
@@ -33,13 +38,15 @@ fun homeView(services: GameServices, onSelect: (String) -> Unit): View = with(se
             grid.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             pair.forEach { g ->
                 val card = KidButton(this).apply {
+                    tag = g.info.id
                     gradient = g.info.gradient
                     cornerDp = 24f
                     emoji = g.info.emoji
                     emojiFrac = 0.58f
-                    caption = getString(g.info.titleRes)
-                    setOnClickListener { onSelect(g.info.id) }
+                    caption = services.text(titlePrompt(g.info.id)).ifEmpty { getString(g.info.titleRes) }
+                    setOnClickListener { onSelect(g.info.id); services.sayTitle(g.info.id) }
                 }
+                cards.add(card)
                 row.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
                     setMargins(u(5), u(5), u(5), u(5))
                 })

@@ -54,7 +54,7 @@ class MemoryMatchMiniGame : MiniGame {
                     services.audio.playCorrect()
                     if (deck.all { it.matched }) {
                         busy = true
-                        root.postDelayed({ services.praise() }, 900)
+                        root.postDelayed({ services.win() }, 900)
                         root.postDelayed({ deal() }, 2600)
                     }
                 } else {

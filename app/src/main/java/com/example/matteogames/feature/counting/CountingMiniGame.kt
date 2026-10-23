@@ -16,15 +16,17 @@ private fun newRound(max: Int): CountRound {
     return CountRound(n, emoji, (distractors + n).shuffled())
 }
 
-/** Count the pictures and tap the number (1..9: Literki has digits only up to 9). */
+/** Count the pictures and tap the number (1..10; 10 is Literki word n.10 = w143). */
 class CountingMiniGame : MiniGame {
     override val info = MiniGameInfo("counting", R.string.game_counting, "🔟", intArrayOf(Pal.Sunshine, Pal.Grass))
 
     override fun createView(services: GameServices, onExit: () -> Unit): View {
         val ctx = services.activity
-        val max = (services.lang.lang?.digits?.keys?.filter { it in 1..9 }?.maxOrNull() ?: 9)
+        val max = 10
+        fun numId(n: Int) = if (n == 10) Ids.TEN else services.lang.lang?.digits?.get(n)?.id ?: "d$n"
+        fun ask() = services.voice.say(services.lang.lang to "p.howmany")
         return ctx.kidScreen(0xFFFFF6DE.toInt(), 0xFFE9F7E6.toInt(), onExit, right = { bar ->
-            bar.add(ctx.langButton(services, 56, { "p.ok" }) { l -> services.voice.say(l to "p.lang") })
+            bar.add(ctx.langButton(services, 56, { "p.howmany" }) { l -> services.voice.say(l to "p.howmany") })
         }) { content, root, _ ->
             var busy = false
             val row = ctx.hbox()
@@ -37,9 +39,9 @@ class CountingMiniGame : MiniGame {
 
             fun render(round: CountRound) {
                 objects.removeAllViews()
-                (1..round.n).toList().chunked(3).forEach { items ->
+                (1..round.n).toList().chunked(if (round.n > 9) 4 else 3).forEach { items ->
                     val r = ctx.hbox()
-                    items.forEach { r.add(ctx.emojiView(round.emoji, 74), 4) }
+                    items.forEach { r.add(ctx.emojiView(round.emoji, if (round.n > 9) 60 else 74), 4) }
                     objects.add(r)
                 }
                 choicesRow.removeAllViews()
@@ -50,8 +52,8 @@ class CountingMiniGame : MiniGame {
                         if (choice == round.n) {
                             busy = true
                             services.audio.playCorrect()
-                            services.praise("d${round.n}")
-                            root.postDelayed({ render(newRound(max)); busy = false }, 2600)
+                            services.praise(numId(round.n))
+                            root.postDelayed({ render(newRound(max)); busy = false; ask() }, 2600)
                         } else {
                             ObjectAnimator.ofFloat(b, "translationX", 0f, -14f, 14f, -8f, 8f, 0f).setDuration(350).start()
                             services.tryAgain()
@@ -61,6 +63,7 @@ class CountingMiniGame : MiniGame {
                 }
             }
             render(newRound(max))
+            root.postDelayed({ ask() }, 1200)
         }
     }
 }

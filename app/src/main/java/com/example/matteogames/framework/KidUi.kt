@@ -96,6 +96,7 @@ open class KidButton(context: Context) : View(context) {
     var labelSizePx = 0f
     /** Optional caption drawn under the emoji (home cards). */
     var caption: String? = null
+    var captionColor: Int = Color.WHITE
     var arrow: Arrow? = null
     var badge: String? = null
     var drawExtra: ((Canvas, RectF) -> Unit)? = null
@@ -187,7 +188,7 @@ open class KidButton(context: Context) : View(context) {
             c.drawText(t, cx, cy - (p.descent() + p.ascent()) / 2, p)
         }
         if (cap != null) {
-            p.color = Color.WHITE
+            p.color = captionColor
             p.typeface = Typeface.DEFAULT_BOLD
             p.textAlign = Paint.Align.CENTER
             p.textSize = r.height() * 0.15f

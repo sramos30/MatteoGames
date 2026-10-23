@@ -36,7 +36,7 @@ class SettingsRepository(context: Context) {
     /** Literki language id ("br", "pl"...) chosen with the language button. */
     var lang: String?
         get() = prefs.getString("lang", null)
-        set(v) { prefs.edit().putString("lang", v).apply() }
+        set(v) { prefs.edit().putString("lang", v).commit() } // on disk at once: the house may close the app right after
 
     /** Letter id (cA...) the Letters game is on. */
     var lettersPos: String

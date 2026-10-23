@@ -13,23 +13,27 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
 
-private enum class ShapeKind { CIRCLE, SQUARE, TRIANGLE, STAR }
+private enum class ShapeKind(val id: String) { CIRCLE(Ids.CIRCLE), SQUARE(Ids.SQUARE), TRIANGLE(Ids.TRIANGLE), STAR(Ids.STAR) }
 
-private val COLORS = listOf(0xFFE53E3E.toInt(), 0xFF5A8DEE.toInt(), 0xFF57C785.toInt(), 0xFFFFC23C.toInt(), 0xFFEF5DA8.toInt(), 0xFFFF8A47.toInt())
+/** Color -> Literki word (c.red, c.blue, c.green, c.yellow, c.pink, c.orange). */
+private val COLORS = listOf(0xFFE53E3E.toInt() to Ids.RED, 0xFF5A8DEE.toInt() to Ids.BLUE, 0xFF57C785.toInt() to Ids.GREEN,
+    0xFFFFC23C.toInt() to Ids.YELLOW, 0xFFEF5DA8.toInt() to Ids.PINK, 0xFFFF8A47.toInt() to Ids.ORANGE)
 
 private class Tile(val shape: ShapeKind, val color: Int)
-private class Round(val tiles: List<Tile>, val correctIndex: Int)
+private class Round(val tiles: List<Tile>, val correctIndex: Int, val nameId: String)
 
-/** Same shape in 4 colors, or 4 shapes in one color; the child matches the sample. */
+/** Same shape in 4 colors (name a color) or 4 shapes in one color (name a shape). */
 private fun newRound(): Round {
-    val tiles = if (Random.nextBoolean()) {
+    val k = (0..3).random()
+    return if (Random.nextBoolean()) {
         val shape = ShapeKind.values().random()
-        COLORS.shuffled().take(4).map { Tile(shape, it) }
+        val cs = COLORS.shuffled().take(4)
+        Round(cs.map { Tile(shape, it.first) }, k, cs[k].second)
     } else {
-        val color = COLORS.random()
-        ShapeKind.values().toList().shuffled().take(4).map { Tile(it, color) }
+        val color = COLORS.random().first
+        val ss = ShapeKind.values().toList().shuffled().take(4)
+        Round(ss.map { Tile(it, color) }, k, ss[k].id)
     }
-    return Round(tiles, (0..3).random())
 }
 
 private val shapePaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -61,9 +65,8 @@ private fun drawTileShape(c: Canvas, box: RectF, tile: Tile) {
 }
 
 /**
- * Colors & shapes. Literki has no color/shape names yet (see docs/CONTEUDO-FALTANTE.md), so
- * instead of hearing a name the child taps the tile that matches the sample on top; praise
- * and "try again" come from Literki's prompts.
+ * Colors & shapes: Literki says "Find" + a color or shape name (MATTEO-IDS.json) and the child
+ * taps it. The speaker button shows the name and repeats it; praise names it again.
  */
 class ColorsShapesMiniGame : MiniGame {
     override val info = MiniGameInfo("colors", R.string.game_colors, "🎨", intArrayOf(Pal.Aqua, Pal.Grape))
@@ -71,15 +74,15 @@ class ColorsShapesMiniGame : MiniGame {
     override fun createView(services: GameServices, onExit: () -> Unit): View {
         val ctx = services.activity
         return ctx.kidScreen(0xFFE6FBFA.toInt(), 0xFFEFE7FF.toInt(), onExit, right = { bar ->
-            bar.add(ctx.langButton(services, 56, { "p.ok" }) { l -> services.voice.say(l to "p.lang") })
+            bar.add(ctx.langButton(services, 56, { "p.find" }) { l -> services.voice.say(l to "p.find") })
         }) { content, root, _ ->
             var round = newRound()
             var busy = false
             val tiles = ArrayList<KidButton>()
-            val sample = ctx.kidButton(120, { fill = 0xFFFFF3C4.toInt(); isClickable = false }) {}
+            fun ask() = services.voice.say(services.lang.lang to "p.find", services.lang.lang to round.nameId)
+            val sample = ctx.kidButton(120, { fill = 0xFFFFF3C4.toInt(); captionColor = Pal.Secondary; emoji = "🔊"; emojiFrac = 0.5f }) { ask() }
             fun bind() {
-                val t = round.tiles[round.correctIndex]
-                sample.drawExtra = { c, r -> drawTileShape(c, r, t) }; sample.invalidate()
+                sample.caption = services.text(round.nameId); sample.invalidate()
                 tiles.forEachIndexed { i, b ->
                     val tile = round.tiles[i]
                     b.drawExtra = { c, r -> drawTileShape(c, r, tile) }
@@ -101,11 +104,11 @@ class ColorsShapesMiniGame : MiniGame {
                         if (index == round.correctIndex) {
                             busy = true
                             services.audio.playCorrect()
-                            services.praise()
-                            root.postDelayed({ round = newRound(); bind(); busy = false }, 1500)
+                            services.praise(round.nameId)
+                            root.postDelayed({ round = newRound(); bind(); busy = false; ask() }, 2200)
                         } else {
                             ObjectAnimator.ofFloat(b, "translationX", 0f, -14f, 14f, -8f, 8f, 0f).setDuration(350).start()
-                            services.tryAgain()
+                            services.voice.say(services.lang.lang to "p.try", services.lang.lang to round.nameId)
                         }
                     }
                     tiles.add(b); row.add(b, 6)
@@ -113,6 +116,7 @@ class ColorsShapesMiniGame : MiniGame {
                 grid.add(row)
             }
             bind()
+            root.postDelayed({ ask() }, 1200)
         }
     }
 }

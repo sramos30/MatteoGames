@@ -24,12 +24,12 @@ class FindItMiniGame : MiniGame {
         }
         var round = newRound()
         return ctx.kidScreen(0xFFE6FBF3.toInt(), 0xFFEAF7EA.toInt(), onExit, right = { bar ->
-            bar.add(ctx.langButton(services, 56, { round?.target?.id }) { _ -> services.sayWord(round?.target?.id) })
+            bar.add(ctx.langButton(services, 56, { round?.target?.id }) { _ -> services.voice.say(services.lang.lang to "p.find", services.lang.lang to round?.target?.id) })
         }) { content, root, _ ->
             val main = ctx.hbox()
             content.add(main)
             main.add(ctx.kidButton(100, { emoji = "🔊"; emojiFrac = 0.55f; cornerDp = 30f }) {
-                services.sayWord(round?.target?.id)
+                services.voice.say(services.lang.lang to "p.find", services.lang.lang to round?.target?.id)
             }, 16)
             val grid = ctx.vbox()
             main.add(grid)
@@ -50,7 +50,7 @@ class FindItMiniGame : MiniGame {
                             services.praise()
                             root.postDelayed({
                                 round = newRound(); show(); busy = false
-                                services.sayWord(round?.target?.id)
+                                services.voice.say(services.lang.lang to "p.find", services.lang.lang to round?.target?.id)
                             }, 1800)
                         } else {
                             ObjectAnimator.ofFloat(b, "translationX", 0f, -14f, 14f, -8f, 8f, 0f).setDuration(350).start()
@@ -63,7 +63,7 @@ class FindItMiniGame : MiniGame {
                 grid.add(row)
             }
             show()
-            services.sayWord(round?.target?.id)
+            services.voice.say(services.lang.lang to "p.find", services.lang.lang to round?.target?.id)
         }
     }
 }

@@ -315,7 +315,7 @@ class JigsawMiniGame : MiniGame {
                 }
             }
 
-            // win overlay: party picture + Literki's "p.ok" text and voice
+            // win overlay: party picture + Literki's "p.win" text and voice
             val win = ctx.vbox(Gravity.CENTER).apply {
                 setBackgroundColor(0xE6FFFFFF.toInt()); visibility = View.GONE; isClickable = true
             }
@@ -332,11 +332,11 @@ class JigsawMiniGame : MiniGame {
                 settings.puzzlePlaced = board.placedCells()
                 if (allDone && pics.isNotEmpty()) {
                     services.celebrate()
-                    winText.label = services.text("p.ok")
+                    winText.label = services.text("p.win")
                     win.visibility = View.VISIBLE
                     val wasCustom = pictureId == null
                     currentPic()?.let { settings.addCompletedPicture(it.id) }
-                    services.praise(pictureId)
+                    services.win(pictureId)
                     root.postDelayed({
                         win.visibility = View.GONE
                         if (wasCustom) services.imageStore.clear()

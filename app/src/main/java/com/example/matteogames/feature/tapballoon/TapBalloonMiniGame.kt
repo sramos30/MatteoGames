@@ -16,6 +16,7 @@ class TapBalloonMiniGame : MiniGame {
         val ctx = services.activity
         val colors = intArrayOf(0xFFEF5DA8.toInt(), 0xFF5A8DEE.toInt(), 0xFF57C785.toInt(), 0xFFFFC23C.toInt())
         return ctx.sizedScreen(Pal.SkyTop, 0xFFFFE7F1.toInt()) { root, w, h ->
+            root.postDelayed({ services.voice.say(services.lang.lang to "p.pop") }, 1200)
             val size = ctx.u(150)
             val top = ctx.u(74)
             val side = ctx.u(Ui.SIDE + 40)   // keep the balloon away from the side controls

@@ -1,71 +1,39 @@
 # Conteúdo faltante no Literki para o MatteoGames
 
 O MatteoGames usa **só** o conteúdo dos pacotes do Literki (provedor `com.literki.app.pacotes`: `/lista`, `/linguas`, `/arquivo`).
-Nada de texto ou voz é inventado no app. Onde falta conteúdo, o jogo se adapta (abaixo). Esta lista é o que precisaria entrar
-nos pacotes (`*.base`, `*.words`, `*.tts`/`*.rec`, `*.images`) para cada jogo ficar completo.
+Nada de texto ou voz é inventado no app.
 
-Medido no Fire Phone em 23/10/2026 com 7 línguas instaladas (pl, br, en, fr, es, it, de; 35 pacotes: base, images, tts, ui, words).
-Nenhum pacote `*.rec` nem pacote de fonte estava instalado.
+Atualizado em 23/10/2026 (v1.0.4-fireos) com o conteúdo novo do literki-estudio (`docs/MATTEO-IDS.json`),
+medido no Fire Phone com 7 línguas (pl, br, en, fr, es, it, de): **143 palavras, 28 frases e 10 dígitos, todos com som**.
 
-## 1. Áudio (o que mais falta)
+## Já resolvido (o app usa)
 
-| Língua | Palavras com mp3 | Letras | Dígitos 0–9 | Frases (`p.*`) | rec |
-|---|---|---|---|---|---|
-| pl | 16/133 | 32/32 | 10/10 | 12/13 | 0 |
-| br | 16/133 | 27/27 | 10/10 | 12/13 | 0 |
-| en | 16/133 | 26/26 | 10/10 | 12/13 | 0 |
-| fr | 16/133 | 26/26 | 10/10 | 12/13 | 0 |
-| es | 16/133 | 27/27 | 10/10 | 12/13 | 0 |
-| it | 16/133 | 26/26 | 10/10 | 12/13 | 0 |
-| de | 16/133 | 29/29 | 10/10 | 12/13 | 0 |
-
-- **w017–w133 não têm mp3 em nenhuma língua.** Hoje caem no TTS do aparelho (último recurso, sem bloquear). No Fire Phone o TTS
-  nem sempre tem voz para pl/br, e aí a palavra fica muda.
-- Uma frase `p.*` por língua está sem mp3 (veja a linha `som:` do logcat, tag `MatteoLiterki`).
-- Nenhuma gravação aprovada (`*.rec`) instalada. Quando houver, ela já ganha do `tts` automaticamente.
-
-## 2. Frases (prompts) que os jogos gostariam de ter
-
-Hoje o Literki tem 13 frases (`p.lang`, `p.missing`, `p.ok`, `p.try`, `p.night`, `p.mode.*`, `p.type.*`). O app usa `p.ok` (acerto),
-`p.try` (erro) e `p.lang` (botão de língua). Faltam, com texto e áudio em todas as línguas:
-
-| Chave sugerida | Exemplo (br) | Usada em |
+| Conteúdo | Ids | Onde |
 |---|---|---|
-| `p.howmany` | Quantos são? | Contar |
-| `p.find` | Onde está…? / Ache… | Ache! (antes da palavra) |
-| `p.same` | Ache o igual | Cores e formas |
-| `p.pick` | Escolha uma figura | Quebra-cabeça (galeria) |
-| `p.win` | Você conseguiu! | Quebra-cabeça, Memória |
-| `p.pop` | Estoure o balão! | Balões |
-| `p.parent` | Peça ajuda a um adulto | Portão dos pais |
-| `p.game.*` | Quebra-cabeça, Números, Letras, Contar, Cores e formas, Memória, Ache!, Balões | Títulos da tela inicial |
-| `p.loading`, `p.nolit`, `p.noperm` | Carregando… / Instale o Literki / Reinstale | Telas de erro (hoje fixas em PT) |
+| Cores `c.red` `c.blue` `c.green` `c.yellow` `c.pink` `c.orange` | w134–w139 | Cores e formas (nomeia a cor) |
+| Formas `s.circle` `s.square` `s.triangle` `s.star` | w140, w141, w142, w104 | Cores e formas (nomeia a forma) |
+| `n.10` | w143 | Contar vai de 1 a 10 |
+| `p.howmany` | | Contar (início de cada rodada) |
+| `p.find` | | Ache! e Cores e formas (antes da palavra) |
+| `p.win` | | Quebra-cabeça e Memória (fim) |
+| `p.pop` | | Balões (início) |
+| `p.game.*` | | Títulos da tela inicial (texto e voz) |
 
-Os títulos da tela inicial e o portão dos pais continuam em inglês fixo (strings do app) até isso existir.
+Cores/formas/10 ficam fora dos jogos de figura (Ache!, Memória, Balões, Quebra-cabeça); a estrela w104 continua também como figura.
 
-## 3. Cores e formas
+## Ainda faltando / pendente
 
-Não há nomes de cor (vermelho, azul, …) nem de forma (círculo, quadrado, triângulo, estrela, coração, …) nos pacotes.
-**Adaptação:** o jogo virou "ache o igual" sem nomes: mesma forma com cores diferentes ou mesma cor com formas diferentes;
-acerto diz `p.ok`, erro `p.try`. Para voltar ao jogo original precisa de `c.red`… e `s.circle`… (texto + mp3) por língua.
+- **`p.same`, `p.pick`, `p.parent`** existem mas ainda não estão ligados (galeria do quebra-cabeça e portão dos pais usam texto fixo).
+- **`p.loading`, `p.nolit`, `p.noperm`**: telas de erro continuam fixas em PT (sem Literki não há de onde ler).
+- **Números** mostra 0–9 (não há dígito `d10`; 10 só como palavra).
+- Algumas letras não têm `exemplo` (no br, o Y); o jogo de Letras mostra só a letra.
+- **DECISÃO PENDENTE — 371 palavras antigas:** o vocabulário antigo do MatteoGames tinha 494 palavras; 371 não existem no Literki
+  e **não dá para acrescentar**: o limite de fx do Literki é 1–254 e já estão em uso até w143. Opções: ampliar o limite no
+  Literki, escolher só algumas, ou deixar como está. Até decidir, os jogos usam só as palavras do Literki. Tabela abaixo.
 
-## 4. Números
+## Pacote `*.ui`
 
-`base.json` tem `digitos` 0–9. Falta **10** (e 11–20 se quiser contar mais).
-**Adaptação:** Números mostra 0–9; Contar vai de 1 a 9.
-
-## 5. Palavras
-
-O Literki tem 133 palavras (todas com desenho SVG em `*.images`). O vocabulário antigo do MatteoGames tinha 494; **371 não existem
-no Literki** e foram removidas (Ache!, Memória, Balões, Quebra-cabeça e exemplos de Letras usam só as 133).
-Tabela completa abaixo (emoji | en | pl | pt), para importar no literki-estudio se quiser.
-
-Também: algumas letras não têm `exemplo` (no br, por exemplo, o Y); nesses casos o jogo de Letras mostra só a letra.
-
-## 6. Pacote `*.ui`
-
-Os pacotes `br.ui` etc. (`ui.json`, chaves `ui.*`) são textos da interface do próprio Literki. O MatteoGames não os usa;
-se o Literki quiser oferecer títulos genéricos (Voltar, Fechar, Galeria), dá para ler daí no futuro.
+Os pacotes `br.ui` etc. (`ui.json`, chaves `ui.*`) são textos da interface do próprio Literki. O MatteoGames não os usa.
 
 ### Palavras do MatteoGames antigo que faltam no Literki (371)
 

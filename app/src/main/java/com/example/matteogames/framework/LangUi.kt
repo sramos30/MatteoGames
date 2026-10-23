@@ -7,6 +7,7 @@ import com.example.matteogames.core.Literki
 /** Current language (persisted in SharedPreferences) and the cycle button, like Literki's cycleLang(). */
 class LangState(private val services: GameServices) {
     val lang: Literki.Lang?
+        // the saved choice wins; the first language is only shown (never saved) while it is missing
         get() = Literki.lang(services.settings.lang) ?: Literki.langs.firstOrNull()
 
     /**
@@ -20,6 +21,7 @@ class LangState(private val services: GameServices) {
             button?.let { ObjectAnimator.ofFloat(it, "translationX", 0f, -14f, 14f, -10f, 10f, 0f).setDuration(350).start() }
             return null
         }
+        android.util.Log.i("MatteoLang", "cycle ${lang?.id} -> ${n.id} (item $item)")
         services.settings.lang = n.id
         Pictures.preferLang = n.id
         button?.label = n.label

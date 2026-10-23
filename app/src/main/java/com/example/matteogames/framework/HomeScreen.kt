@@ -19,6 +19,10 @@ fun homeView(services: GameServices, onSelect: (String) -> Unit): View = with(se
         head.addView(fitLabel("Matteo Games", -1, 44), LinearLayout.LayoutParams(0, u(44), 1f))
         lateinit var lb: KidButton
         lb = langButton(services, 52, { "p.lang" }) { l -> services.voice.say(l to "p.lang") }
+        // house: hold 1.5 s to go back to Literki (a short tap only wiggles)
+        val home = HoldButton(this, 1500L) { exitToLiterki(services.activity) }
+        home.arrow = Arrow.HOME
+        head.addView(home, LinearLayout.LayoutParams(u(56), u(56)).apply { setMargins(u(4), 0, u(14), 0) })
         head.add(lb, 4)
         col.add(head, 0, ViewGroup.LayoutParams.MATCH_PARENT, u(60))
 
@@ -70,4 +74,15 @@ private fun wrap(s: String, max: Int): List<String> {
     s.split(' ').forEach { w -> if (cur.isNotEmpty() && cur.length + 1 + w.length > max) { out.add(cur); cur = w } else cur = if (cur.isEmpty()) w else "$cur $w" }
     if (cur.isNotEmpty()) out.add(cur)
     return out
+}
+
+/** Brings Literki back to the front (launching it if it is not running) and closes MatteoGames. */
+fun exitToLiterki(a: android.app.Activity) {
+    val i = a.packageManager.getLaunchIntentForPackage("com.literki.app")
+    if (i != null) {
+        // launcher intent + NEW_TASK resumes Literki's existing task instead of recreating it
+        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        try { a.startActivity(i) } catch (_: Exception) {}
+    }
+    a.finishAffinity()
 }

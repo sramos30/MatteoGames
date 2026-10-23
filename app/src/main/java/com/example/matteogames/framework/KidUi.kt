@@ -71,7 +71,7 @@ fun gradientBg(top: Int, bottom: Int) =
     GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom))
 
 /** Arrow glyphs are drawn as shapes (no font dependency). */
-enum class Arrow { LEFT, RIGHT, CLOSE }
+enum class Arrow { LEFT, RIGHT, CLOSE, HOME }
 
 /**
  * Big, rounded, chunky button drawn on a Canvas, sized for small fingers. Shows a Noto
@@ -152,6 +152,14 @@ open class KidButton(context: Context) : View(context) {
                     c.drawLine(cx - s, cy - s, cx + s, cy + s, p); c.drawLine(cx + s, cy - s, cx - s, cy + s, p)
                     p.style = Paint.Style.FILL
                 }
+                Arrow.HOME -> {   // little house: roof triangle + body with a door cut out
+                    val hs = side * 0.26f
+                    path.moveTo(cx, cy - hs * 1.05f); path.lineTo(cx + hs * 1.1f, cy - hs * 0.05f); path.lineTo(cx - hs * 1.1f, cy - hs * 0.05f); path.close()
+                    path.addRect(cx - hs * 0.75f, cy - hs * 0.1f, cx + hs * 0.75f, cy + hs * 0.95f, Path.Direction.CW)
+                    c.drawPath(path, p)
+                    p.color = fill
+                    c.drawRoundRect(RectF(cx - hs * 0.25f, cy + hs * 0.3f, cx + hs * 0.25f, cy + hs * 0.96f), hs * 0.1f, hs * 0.1f, p)
+                }
             }
         }
 
@@ -199,6 +207,58 @@ open class KidButton(context: Context) : View(context) {
             p.textAlign = Paint.Align.RIGHT; p.textSize = side * 0.24f
             c.drawText(b, r.right - side * 0.08f, r.top + side * 0.26f, p)
         }
+    }
+}
+
+/**
+ * Button that fires only after being held for [holdMs] (like Literki's 1.5 s avocado hold).
+ * While held a ring fills around the edge; a short tap just wiggles.
+ */
+class HoldButton(context: Context, private val holdMs: Long, private val onHold: () -> Unit) : KidButton(context) {
+    private var start = 0L
+    private var progress = 0f
+    private var fired = false
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; color = Pal.Sunshine }
+    private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0x22000000 }
+    private val tick = object : Runnable {
+        override fun run() {
+            progress = ((android.os.SystemClock.uptimeMillis() - start) / holdMs.toFloat()).coerceAtMost(1f)
+            invalidate()
+            if (progress >= 1f) { if (!fired) { fired = true; onHold() } } else postOnAnimation(this)
+        }
+    }
+    init {
+        circle = true
+        isClickable = true
+        drawExtra = { c, r ->
+            if (progress > 0f) {
+                val sw = minOf(r.width(), r.height()) * 0.09f
+                ring.strokeWidth = sw; track.strokeWidth = sw
+                val o = RectF(r.left + sw / 2, r.top + sw / 2, r.right - sw / 2, r.bottom - sw / 2)
+                c.drawOval(o, track)
+                c.drawArc(o, -90f, 360f * progress, false, ring)
+            }
+        }
+    }
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                start = android.os.SystemClock.uptimeMillis(); fired = false; progress = 0f
+                removeCallbacks(tick); postOnAnimation(tick)
+                animate().scaleX(0.92f).scaleY(0.92f).setDuration(80).start()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(tick)
+                val short = !fired
+                progress = 0f; invalidate()
+                animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                if (short) wiggle()
+            }
+        }
+        return true
+    }
+    private fun wiggle() {
+        android.animation.ObjectAnimator.ofFloat(this, "rotation", 0f, -8f, 8f, -5f, 5f, 0f).setDuration(300).start()
     }
 }
 

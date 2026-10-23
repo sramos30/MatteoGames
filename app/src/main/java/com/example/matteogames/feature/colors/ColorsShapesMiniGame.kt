@@ -1,40 +1,16 @@
 package com.example.matteogames.feature.colors
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.unit.dp
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.view.View
 import com.example.matteogames.R
 import com.example.matteogames.core.EN
 import com.example.matteogames.core.PL
 import com.example.matteogames.core.PT
 import com.example.matteogames.core.Word
-import com.example.matteogames.framework.GameServices
-import com.example.matteogames.framework.KidScreen
-import com.example.matteogames.framework.MiniGame
-import com.example.matteogames.framework.MiniGameInfo
-import com.example.matteogames.ui.theme.Aqua
-import com.example.matteogames.ui.theme.Grape
+import com.example.matteogames.framework.*
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.min
@@ -43,15 +19,15 @@ import kotlin.random.Random
 
 private enum class ShapeKind { CIRCLE, SQUARE, TRIANGLE, STAR }
 
-private data class ColorOpt(val color: Color, val word: Word)
+private class ColorOpt(val color: Int, val word: Word)
 
 private val COLORS = listOf(
-    ColorOpt(Color(0xFFE53E3E), Word("red", "czerwony", "vermelho")),
-    ColorOpt(Color(0xFF5A8DEE), Word("blue", "niebieski", "azul")),
-    ColorOpt(Color(0xFF57C785), Word("green", "zielony", "verde")),
-    ColorOpt(Color(0xFFFFC23C), Word("yellow", "żółty", "amarelo")),
-    ColorOpt(Color(0xFFEF5DA8), Word("pink", "różowy", "rosa")),
-    ColorOpt(Color(0xFFFF8A47), Word("orange", "pomarańczowy", "laranja")),
+    ColorOpt(0xFFE53E3E.toInt(), Word("red", "czerwony", "vermelho")),
+    ColorOpt(0xFF5A8DEE.toInt(), Word("blue", "niebieski", "azul")),
+    ColorOpt(0xFF57C785.toInt(), Word("green", "zielony", "verde")),
+    ColorOpt(0xFFFFC23C.toInt(), Word("yellow", "żółty", "amarelo")),
+    ColorOpt(0xFFEF5DA8.toInt(), Word("pink", "różowy", "rosa")),
+    ColorOpt(0xFFFF8A47.toInt(), Word("orange", "pomarańczowy", "laranja")),
 )
 
 private val SHAPE_WORDS = mapOf(
@@ -61,130 +37,91 @@ private val SHAPE_WORDS = mapOf(
     ShapeKind.STAR to Word("star", "gwiazda", "estrela"),
 )
 
-private data class Tile(val shape: ShapeKind, val color: Color)
-
-private data class Round(
-    val tiles: List<Tile>,
-    val correctIndex: Int,
-    val promptText: String,
-    val promptLocale: Locale,
-)
+private class Tile(val shape: ShapeKind, val color: Int)
+private class Round(val tiles: List<Tile>, val correctIndex: Int, val promptText: String, val promptLocale: Locale)
 
 private fun roundFor(tiles: List<Tile>, target: Int, prompt: Word): Round {
-    // One random language per round (not all three).
     val (locale, text) = listOf(EN to prompt.en, PL to prompt.pl, PT to prompt.pt).random()
     return Round(tiles, target, text, locale)
 }
 
 private fun newRound(): Round {
-    val byColor = Random.nextBoolean()
-    return if (byColor) {
+    return if (Random.nextBoolean()) {
         val cols = COLORS.shuffled().take(4)
-        val shapes = ShapeKind.entries.shuffled()
+        val shapes = ShapeKind.values().toList().shuffled()
         val tiles = cols.mapIndexed { idx, c -> Tile(shapes[idx % shapes.size], c.color) }
         val target = (0..3).random()
         roundFor(tiles, target, cols[target].word)
     } else {
-        val shapes = ShapeKind.entries.shuffled().take(4)
+        val shapes = ShapeKind.values().toList().shuffled().take(4)
         val tiles = shapes.map { Tile(it, COLORS.random().color) }
         val target = (0..3).random()
         roundFor(tiles, target, SHAPE_WORDS.getValue(shapes[target]))
     }
 }
 
+private val shapePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+private fun drawTileShape(c: Canvas, box: RectF, tile: Tile) {
+    val pad = box.width() * 0.16f
+    val l = box.left + pad; val t = box.top + pad
+    val w = box.width() - 2 * pad; val h = box.height() - 2 * pad
+    shapePaint.color = tile.color
+    when (tile.shape) {
+        ShapeKind.CIRCLE -> c.drawCircle(l + w / 2, t + h / 2, min(w, h) / 2, shapePaint)
+        ShapeKind.SQUARE -> c.drawRoundRect(RectF(l, t, l + w, t + h), w * 0.12f, w * 0.12f, shapePaint)
+        ShapeKind.TRIANGLE -> c.drawPath(Path().apply {
+            moveTo(l + w / 2f, t); lineTo(l + w, t + h); lineTo(l, t + h); close()
+        }, shapePaint)
+        ShapeKind.STAR -> {
+            val cx = l + w / 2f; val cy = t + h / 2f
+            val outer = min(w, h) / 2f; val inner = outer * 0.5f
+            val p = Path()
+            for (i in 0 until 10) {
+                val r = if (i % 2 == 0) outer else inner
+                val a = Math.toRadians(-90.0 + i * 36.0)
+                val x = cx + r * cos(a).toFloat(); val y = cy + r * sin(a).toFloat()
+                if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+            }
+            p.close(); c.drawPath(p, shapePaint)
+        }
+    }
+}
+
+/** Hear a color or shape name, tap the matching tile. */
 class ColorsShapesMiniGame : MiniGame {
-    override val info = MiniGameInfo(
-        id = "colors",
-        titleRes = R.string.game_colors,
-        emoji = "🎨",
-        gradient = listOf(Aqua, Grape),
-    )
+    override val info = MiniGameInfo("colors", R.string.game_colors, "🎨", intArrayOf(Pal.Aqua, Pal.Grape))
 
-    @Composable
-    override fun Screen(services: GameServices, onExit: () -> Unit) {
-        var round by remember { mutableStateOf(newRound()) }
-
-        // Say the first prompt once; later prompts are spoken from onCorrect below.
-        LaunchedEffect(Unit) { services.speech.speak(round.promptText, round.promptLocale) }
-
-        KidScreen(onExit = onExit, colors = listOf(Color(0xFFE6FBFA), Color(0xFFEFE7FF))) {
-            Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                for (r in 0..1) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        for (c in 0..1) {
-                            val index = r * 2 + c
-                            val tile = round.tiles[index]
-                            ShapeTile(tile = tile, sizeDp = 150) {
-                                if (index == round.correctIndex) {
-                                    services.audio.playCorrect()
-                                    val next = newRound()
-                                    round = next
-                                    services.speech.speak(next.promptText, next.promptLocale)
-                                } else {
-                                    // Gentle retry: say the same prompt again (same language).
-                                    services.speech.speak(round.promptText, round.promptLocale)
-                                }
-                            }
-                        }
-                    }
-                    if (r == 0) Box(Modifier.size(16.dp))
+    override fun createView(services: GameServices, onExit: () -> Unit): View {
+        val ctx = services.activity
+        val (root, content) = ctx.kidScreen(0xFFE6FBFA.toInt(), 0xFFEFE7FF.toInt(), onExit)
+        var round = newRound()
+        val tiles = ArrayList<KidButton>()
+        fun bind() = tiles.forEachIndexed { i, b ->
+            val tile = round.tiles[i]
+            b.drawExtra = { c, r -> drawTileShape(c, r, tile) }
+            b.invalidate()
+        }
+        content.add(ctx.kidButton(90, { emoji = "🔊"; emojiFrac = 0.55f; cornerDp = 28f }) {
+            services.speech.speak(round.promptText, round.promptLocale)
+        }, 10)
+        for (r in 0..1) {
+            val row = ctx.hbox()
+            for (c in 0..1) {
+                val index = r * 2 + c
+                val b = ctx.kidButton(150) {
+                    if (index == round.correctIndex) {
+                        services.audio.playCorrect()
+                        round = newRound(); bind()
+                        services.speech.speak(round.promptText, round.promptLocale)
+                    } else services.speech.speak(round.promptText, round.promptLocale)
                 }
+                tiles.add(b); row.add(b, 8)
             }
+            content.add(row)
         }
-    }
-}
-
-@Composable
-private fun ShapeTile(tile: Tile, sizeDp: Int, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = MaterialTheme.shapes.large,
-        color = Color.White,
-        shadowElevation = 6.dp,
-        modifier = Modifier.size(sizeDp.dp),
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize().padding(22.dp)) {
-            drawTileShape(tile.shape, tile.color)
-        }
-    }
-}
-
-private fun DrawScope.drawTileShape(shape: ShapeKind, color: Color) {
-    val w = size.width
-    val h = size.height
-    when (shape) {
-        ShapeKind.CIRCLE -> drawCircle(color)
-        ShapeKind.SQUARE -> drawRoundRect(color, cornerRadius = CornerRadius(w * 0.12f, w * 0.12f))
-        ShapeKind.TRIANGLE -> {
-            val p = Path().apply {
-                moveTo(w / 2f, 0f)
-                lineTo(w, h)
-                lineTo(0f, h)
-                close()
-            }
-            drawPath(p, color)
-        }
-        ShapeKind.STAR -> drawPath(starPath(w, h), color)
-    }
-}
-
-private fun starPath(w: Float, h: Float): Path {
-    val cx = w / 2f
-    val cy = h / 2f
-    val outer = min(w, h) / 2f
-    val inner = outer * 0.5f
-    return Path().apply {
-        for (i in 0 until 10) {
-            val r = if (i % 2 == 0) outer else inner
-            val a = Math.toRadians((-90.0 + i * 36.0))
-            val x = cx + r * cos(a).toFloat()
-            val y = cy + r * sin(a).toFloat()
-            if (i == 0) moveTo(x, y) else lineTo(x, y)
-        }
-        close()
+        bind()
+        services.speech.speak(round.promptText, round.promptLocale)
+        return root
     }
 }

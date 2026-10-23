@@ -1,97 +1,101 @@
 package com.example.matteogames.core
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
-import java.util.ArrayDeque
 import java.util.Locale
 
 /**
- * Thin wrapper over Android [TextToSpeech]. The child cannot read yet, so every word is
- * spoken aloud. Supports speaking a short sequence across different languages
- * (English → Polish → Portuguese) by switching the engine's locale between utterances.
- *
- * No runtime permission is required. If a language's voice data is missing on the device,
- * that utterance is skipped quietly rather than failing.
+ * Thin wrapper over Android [TextToSpeech] using API-19 compatible calls. Speaks a short
+ * sequence across languages by switching the engine's locale between utterances.
+ * If a language's voice is missing on the device, that utterance is skipped quietly.
  */
 class SpeechService(context: Context) {
 
-    /** A word to say, the language, and how fast (1f = normal; lower = clearer/slower). */
     data class Utterance(val text: String, val locale: Locale, val rate: Float = 0.82f)
 
+    private val main = Handler(Looper.getMainLooper())
     private var ready = false
-    private val queue = ArrayDeque<Utterance>()
-    private var pendingOnReady: (() -> Unit)? = null
+    private val queue = java.util.ArrayDeque<Utterance>()
+    private var pending: List<Utterance>? = null
+    private var counter = 0
 
-    private val _speaking = mutableStateOf(false)
-    /** True while a word/sequence is being spoken. Observe to gate navigation, etc. */
-    val speaking: State<Boolean> get() = _speaking
+    /** True while a word/sequence is being spoken. */
+    private var speakingFlag = false
+    private var speakingSince = 0L
+    /** Treated as finished after 10 s, so a silent/broken TTS engine never locks the UI. */
+    val speaking: Boolean
+        get() = speakingFlag && android.os.SystemClock.uptimeMillis() - speakingSince < 10_000
+    /** Called on the main thread whenever [speaking] changes. */
+    var onSpeakingChanged: ((Boolean) -> Unit)? = null
 
-    private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
-        ready = status == TextToSpeech.SUCCESS
-        if (ready) {
-            // Slightly higher pitch is clearer for a young listener; per-utterance rate below.
-            tts.setPitch(1.05f)
-            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {}
-                override fun onDone(utteranceId: String?) { playNext() }
-                @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String?) { playNext() }
-                override fun onError(utteranceId: String?, errorCode: Int) { playNext() }
-            })
-            pendingOnReady?.invoke()
-            pendingOnReady = null
-        }
+    private fun setSpeaking(v: Boolean) {
+        if (v) speakingSince = android.os.SystemClock.uptimeMillis()
+        if (speakingFlag == v) return
+        speakingFlag = v
+        onSpeakingChanged?.invoke(v)
     }
 
-    /** Speak a single word in one language, at an optional rate. */
+    private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
+        main.post { onInit(status) }
+    }
+
+    private fun onInit(status: Int) {
+        ready = status == TextToSpeech.SUCCESS
+        if (!ready) { setSpeaking(false); return }
+        tts.setPitch(1.05f)
+        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) { main.post { playNext() } }
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) { main.post { playNext() } }
+        })
+        pending?.let { startSequence(it) }
+        pending = null
+    }
+
     fun speak(text: String, locale: Locale, rate: Float = 0.82f) =
         speakSequence(listOf(Utterance(text, locale, rate)))
 
-    /** Speak several words back-to-back, each in its own language. */
     fun speakSequence(items: List<Utterance>) {
         if (items.isEmpty()) return
-        _speaking.value = true
-        if (!ready) {
-            pendingOnReady = { startSequence(items) }
-            return
-        }
+        setSpeaking(true)
+        if (!ready) { pending = items; return }
         startSequence(items)
     }
 
     private fun startSequence(items: List<Utterance>) {
         queue.clear()
         queue.addAll(items)
-        tts.stop()
+        try { tts.stop() } catch (e: Exception) { }
         playNext()
     }
 
     private fun playNext() {
         val item = queue.poll()
-        if (item == null) {
-            _speaking.value = false
-            return
-        }
-        val res = tts.setLanguage(item.locale)
+        if (item == null) { setSpeaking(false); return }
+        val res = try { tts.setLanguage(item.locale) } catch (e: Exception) { TextToSpeech.LANG_NOT_SUPPORTED }
         if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-            playNext() // language voice not installed — skip to the next one
-            return
+            playNext(); return
         }
         tts.setSpeechRate(item.rate)
-        tts.speak(item.text, TextToSpeech.QUEUE_FLUSH, null, "u${item.hashCode()}")
+        val params = HashMap<String, String>()
+        params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "u${counter++}"
+        @Suppress("DEPRECATION")
+        val r = tts.speak(item.text, TextToSpeech.QUEUE_FLUSH, params)
+        if (r != TextToSpeech.SUCCESS) main.post { playNext() }
     }
 
-    /** Stop any current/queued speech without shutting the engine down. */
     fun stop() {
         queue.clear()
-        _speaking.value = false
-        if (ready) tts.stop()
+        pending = null
+        setSpeaking(false)
+        if (ready) try { tts.stop() } catch (e: Exception) { }
     }
 
     fun shutdown() {
-        tts.stop()
-        tts.shutdown()
+        try { tts.stop(); tts.shutdown() } catch (e: Exception) { }
     }
 }

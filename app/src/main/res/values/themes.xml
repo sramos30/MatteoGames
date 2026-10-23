@@ -1,3 +1,5 @@
 <resources>
-    <style name="Theme.MatteoGames" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.MatteoGames" parent="android:Theme.Holo.Light.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
 </resources>

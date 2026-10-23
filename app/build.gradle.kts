@@ -1,7 +1,8 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -9,30 +10,39 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.matteogames"
-        minSdk = 26
+        // Installed/updated through Literki on FireOS: same signer as com.literki.app.
+        applicationId = "com.literki.matteogames"
+        // API 19 = Android 4.4 / FireOS (Fire Phone). UI is plain Views + Canvas (no Compose).
+        minSdk = 19
         targetSdk = 35
         // CI passes VERSION_CODE (the run number) so each build is an upgrade; 1 locally.
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
-        versionName = "1.0.${System.getenv("VERSION_CODE") ?: "0"}"
+        versionName = "1.0.${System.getenv("VERSION_CODE") ?: "0"}-fireos"
     }
 
+    // Signed with the Literki key (outside the project and git):
+    // ~/.literki/assinatura.properties -> storeFile (relative to that folder), storePassword, keyAlias, keyPassword.
+    // Android only accepts updates signed with the SAME key, and Literki only installs apps with its signature.
+    val assinatura = File(System.getProperty("user.home"), ".literki/assinatura.properties")
+    if (!assinatura.exists()) {
+        throw GradleException("Falta a chave de assinatura do Literki: $assinatura")
+    }
+    val sig = Properties().apply { assinatura.inputStream().use { load(it) } }
     signingConfigs {
-        // Stable key so every build has the same signature (required for in-place upgrades).
-        // This is a debug key committed for family sideloading — NOT for the Play Store.
-        getByName("debug") {
-            val ks = file("matteo-debug.keystore")
-            if (ks.exists()) {
-                storeFile = ks
-                storePassword = "matteo123"
-                keyAlias = "matteo"
-                keyPassword = "matteo123"
-            }
+        create("literki") {
+            storeFile = File(assinatura.parentFile, sig.getProperty("storeFile"))
+            storePassword = sig.getProperty("storePassword")
+            keyAlias = sig.getProperty("keyAlias")
+            keyPassword = sig.getProperty("keyPassword")
         }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("literki")
+        }
         release {
+            signingConfig = signingConfigs.getByName("literki")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -47,21 +57,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-    buildFeatures {
-        compose = true
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 
 dependencies {
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
-    implementation(libs.androidx.datastore.preferences)
-    debugImplementation(libs.androidx.ui.tooling)
+    // Intentionally no AndroidX: everything is framework API available on Android 4.4.
 }

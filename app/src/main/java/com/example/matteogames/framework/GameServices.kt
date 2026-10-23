@@ -1,52 +1,20 @@
 package com.example.matteogames.framework
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
 import com.example.matteogames.core.AudioService
 import com.example.matteogames.core.ImageStore
 import com.example.matteogames.core.SettingsRepository
 import com.example.matteogames.core.SpeechService
 
 /** Shared plumbing so individual minigames don't re-implement audio, storage, etc. */
-interface GameServices {
-    val audio: AudioService
-    val imageStore: ImageStore
-    val settings: SettingsRepository
+class GameServices(val activity: Activity) {
+    val audio = AudioService(activity)
+    val imageStore = ImageStore(activity)
+    val settings = SettingsRepository(activity)
+    val speech = SpeechService(activity)
 
-    /** Speaks words aloud (the child cannot read yet). */
-    val speech: SpeechService
+    /** Set by a game that wants the result of the system image picker. */
+    var onImagePicked: ((android.net.Uri) -> Unit)? = null
 
-    /** Reusable "you won" feedback. */
-    fun celebrate()
-}
-
-class DefaultGameServices(
-    override val audio: AudioService,
-    override val imageStore: ImageStore,
-    override val settings: SettingsRepository,
-    override val speech: SpeechService,
-) : GameServices {
-    override fun celebrate() {
-        audio.playWin()
-    }
-}
-
-@Composable
-fun rememberGameServices(): GameServices {
-    val context = LocalContext.current.applicationContext
-    val services = remember {
-        DefaultGameServices(
-            audio = AudioService(context),
-            imageStore = ImageStore(context),
-            settings = SettingsRepository(context),
-            speech = SpeechService(context),
-        )
-    }
-    // Release the TextToSpeech engine when the app leaves composition.
-    DisposableEffect(services) {
-        onDispose { services.speech.shutdown() }
-    }
-    return services
+    fun celebrate() = audio.playWin()
 }

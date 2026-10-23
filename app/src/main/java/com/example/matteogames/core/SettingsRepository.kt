@@ -1,74 +1,45 @@
 package com.example.matteogames.core
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
-
+/** Persisted settings / resume state (SharedPreferences; works on Android 4.4). */
 class SettingsRepository(context: Context) {
 
-    private val appContext = context.applicationContext
+    private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     /** Number of rows/columns in the jigsaw grid. Default 2 (very easy for toddlers). */
-    val gridSize: Flow<Int> = appContext.dataStore.data.map { prefs ->
-        prefs[KEY_GRID] ?: DEFAULT_GRID
+    var gridSize: Int
+        get() = prefs.getInt("grid_size", DEFAULT_GRID)
+        set(v) { prefs.edit().putInt("grid_size", v).apply() }
+
+    /** Ids of puzzle pictures the child has already completed. */
+    val completedPictures: Set<String>
+        get() = HashSet(prefs.getStringSet("completed_pictures", emptySet()) ?: emptySet())
+
+    fun addCompletedPicture(id: String) {
+        prefs.edit().putStringSet("completed_pictures", completedPictures + id).apply()
     }
 
-    suspend fun setGridSize(size: Int) {
-        appContext.dataStore.edit { prefs -> prefs[KEY_GRID] = size }
-    }
-
-    /** Ids of puzzle pictures the child has already completed (persisted across restarts). */
-    val completedPictures: Flow<Set<String>> = appContext.dataStore.data.map { prefs ->
-        prefs[KEY_COMPLETED] ?: emptySet()
-    }
-
-    suspend fun addCompletedPicture(id: String) {
-        appContext.dataStore.edit { prefs ->
-            prefs[KEY_COMPLETED] = (prefs[KEY_COMPLETED] ?: emptySet()) + id
-        }
-    }
-
-    // --- Per-game resume state (so a game continues where it was left) ---
-
-    val jigsawPicture: Flow<String> = appContext.dataStore.data.map { it[KEY_JIGSAW] ?: "" }
-    suspend fun setJigsawPicture(id: String) {
-        appContext.dataStore.edit { it[KEY_JIGSAW] = id }
-    }
+    var jigsawPicture: String
+        get() = prefs.getString("jigsaw_picture", "") ?: ""
+        set(v) { prefs.edit().putString("jigsaw_picture", v).apply() }
 
     /** Which pieces ("row,col") are already placed on the current puzzle. */
-    val puzzlePlaced: Flow<Set<String>> = appContext.dataStore.data.map { it[KEY_PLACED] ?: emptySet() }
-    suspend fun setPuzzlePlaced(cells: Set<String>) {
-        appContext.dataStore.edit { it[KEY_PLACED] = cells }
-    }
+    var puzzlePlaced: Set<String>
+        get() = HashSet(prefs.getStringSet("puzzle_placed", emptySet()) ?: emptySet())
+        set(v) { prefs.edit().putStringSet("puzzle_placed", HashSet(v)).apply() }
 
-    val numbersCurrent: Flow<Int> = appContext.dataStore.data.map { it[KEY_NUMBERS] ?: 1 }
-    suspend fun setNumbersCurrent(n: Int) {
-        appContext.dataStore.edit { it[KEY_NUMBERS] = n }
-    }
+    var numbersCurrent: Int
+        get() = prefs.getInt("numbers_current", 1)
+        set(v) { prefs.edit().putInt("numbers_current", v).apply() }
 
-    val lettersLang: Flow<Int> = appContext.dataStore.data.map { it[KEY_LETTERS_LANG] ?: 0 }
-    val lettersPos: Flow<Int> = appContext.dataStore.data.map { it[KEY_LETTERS_POS] ?: 0 }
-    suspend fun setLetters(lang: Int, pos: Int) {
-        appContext.dataStore.edit { it[KEY_LETTERS_LANG] = lang; it[KEY_LETTERS_POS] = pos }
+    val lettersLang: Int get() = prefs.getInt("letters_lang", 0)
+    val lettersPos: Int get() = prefs.getInt("letters_pos", 0)
+    fun setLetters(lang: Int, pos: Int) {
+        prefs.edit().putInt("letters_lang", lang).putInt("letters_pos", pos).apply()
     }
 
     companion object {
         const val DEFAULT_GRID = 2
-        private val KEY_GRID = intPreferencesKey("grid_size")
-        private val KEY_COMPLETED = stringSetPreferencesKey("completed_pictures")
-        private val KEY_JIGSAW = stringPreferencesKey("jigsaw_picture")
-        private val KEY_PLACED = stringSetPreferencesKey("puzzle_placed")
-        private val KEY_NUMBERS = intPreferencesKey("numbers_current")
-        private val KEY_LETTERS_LANG = intPreferencesKey("letters_lang")
-        private val KEY_LETTERS_POS = intPreferencesKey("letters_pos")
     }
 }

@@ -117,3 +117,7 @@ app/src/main/java/com/example/matteogames/
   feature/tapballoon/  TapBalloonMiniGame
   ui/theme/    Color, Theme (KidsShapes + KidsTypography)
 ```
+
+## FireOS / Android 4.4
+
+Branch `fireos-api19`: Views + Canvas, minSdk 19, signed with the Literki key. See [docs/FIREOS.md](docs/FIREOS.md).

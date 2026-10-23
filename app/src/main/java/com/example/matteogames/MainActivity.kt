@@ -76,6 +76,11 @@ class MainActivity : Activity() {
      * Back from Literki (house button, kiosk Apps screen): re-read the packages and rebuild Home so the
      * language button shows the saved choice, never a stale label or a fallback from a reload in progress.
      */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)   // singleTask: keep extras (test hook mg_count) for the next game opened
+    }
+
     override fun onRestart() {
         super.onRestart()
         if (!inGame) loadCatalog()

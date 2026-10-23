@@ -54,7 +54,7 @@ object PuzzleLogic {
      * the Literki drawing (Noto SVG from xx.images) or the bundled Noto PNG.
      */
     fun wordPicture(context: Context, word: Literki.Word, size: Int = 600): Bitmap {
-        val bg = bgFor(word.fx)
+        val bg = bgFor(word.fx ?: word.id.hashCode())
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)

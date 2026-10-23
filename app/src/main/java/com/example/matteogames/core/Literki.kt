@@ -51,7 +51,8 @@ object Literki {
         }
     }
 
-    class Word(val id: String, val emoji: String, val fx: Int) {
+    /** [fx] is optional: newer words may come without one (they sort after, by id). */
+    class Word(val id: String, val emoji: String, val fx: Int?) {
         /** language id -> "pkg/path" of the Noto SVG drawing from xx.images */
         val images = LinkedHashMap<String, String>()
     }
@@ -129,10 +130,15 @@ object Literki {
             val words = LinkedHashMap<String, String>()
             if (pk.containsKey("$id.words")) read(ctx, "$id.words", "words.json")?.let { s ->
                 val a = JSONArray(s)
-                for (i in 0 until a.length()) { val c = a.getJSONObject(i)
-                    val sid = c.getString("simbolo"); words[sid] = c.getString("texto")
-                    val w = ws.getOrPut(sid) { Word(sid, c.optString("emoji"), c.optInt("fx")) }
-                    if (w.emoji.isEmpty()) ws[sid] = Word(sid, c.optString("emoji"), c.optInt("fx")).also { it.images.putAll(w.images) }
+                for (i in 0 until a.length()) { val c = a.optJSONObject(i) ?: continue
+                    // tolerate entries without fx (or with a bad one), skip only ones without id/text
+                    val sid = c.optString("simbolo").ifEmpty { null } ?: continue
+                    val txt = c.optString("texto").ifEmpty { null } ?: continue
+                    words[sid] = txt
+                    val fx = c.opt("fx")?.toString()?.toIntOrNull()
+                    val w = ws.getOrPut(sid) { Word(sid, c.optString("emoji"), fx) }
+                    if (w.emoji.isEmpty() && c.optString("emoji").isNotEmpty() || w.fx == null && fx != null)
+                        ws[sid] = Word(sid, c.optString("emoji").ifEmpty { w.emoji }, w.fx ?: fx).also { it.images.putAll(w.images) }
                 }
             }
             if (pk.containsKey("$id.images")) read(ctx, "$id.images", "imagens.json")?.let { s ->
@@ -153,8 +159,8 @@ object Literki {
             ls.add(Lang(id, label, localeFor(id), prompts, letters, digits, words, sounds))
         }
         langs = ls
-        words = ws.values.sortedBy { it.fx }
-        Log.i(TAG, "catalogo: ${ls.size} linguas, ${words.size} palavras, ${words.count { it.images.isNotEmpty() }} com desenho")
+        words = ws.values.sortedWith(compareBy<Word>({ it.fx == null }, { it.fx ?: 0 }, { it.id }))
+        Log.i(TAG, "catalogo: ${ls.size} linguas, ${words.size} palavras, ${words.count { it.images.isNotEmpty() }} com desenho, ${words.count { it.fx == null }} sem fx")
         return if (ls.isEmpty()) Status.EMPTY else Status.OK
     }
 

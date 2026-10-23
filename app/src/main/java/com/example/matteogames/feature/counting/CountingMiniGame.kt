@@ -9,8 +9,14 @@ import com.example.matteogames.framework.*
 
 private class CountRound(val n: Int, val emoji: String, val choices: List<Int>)
 
+/** Each number 1..max once per bag, so 10 comes up at least once every 10 rounds. */
+private val bag = ArrayDeque<Int>()
+/** Test hook: `am start ... --ei mg_count 10` forces the first round. */
+var forcedCount = 0
+
 private fun newRound(max: Int): CountRound {
-    val n = (1..max).random()
+    if (bag.isEmpty() || bag.any { it > max }) { bag.clear(); bag.addAll((1..max).shuffled()) }
+    val n = if (forcedCount in 1..max) forcedCount.also { forcedCount = 0 } else bag.removeFirst()
     val emoji = listOf("⚽", "🍎", "⭐", "🐶", "🎈", "🐱", "🐟").random()
     val distractors = ((1..max).toList() - n).shuffled().take(2)
     return CountRound(n, emoji, (distractors + n).shuffled())
@@ -23,7 +29,10 @@ class CountingMiniGame : MiniGame {
     override fun createView(services: GameServices, onExit: () -> Unit): View {
         val ctx = services.activity
         val max = 10
+        // 10 has no digit: its word w143 (shown as "10" even where the language lacks the word text)
         fun numId(n: Int) = if (n == 10) Ids.TEN else services.lang.lang?.digits?.get(n)?.id ?: "d$n"
+        forcedCount = services.activity.intent?.getIntExtra("mg_count", 0) ?: 0
+        services.activity.intent?.removeExtra("mg_count")
         fun ask() = services.voice.say(services.lang.lang to "p.howmany")
         return ctx.kidScreen(0xFFFFF6DE.toInt(), 0xFFE9F7E6.toInt(), onExit, right = { bar ->
             bar.add(ctx.langButton(services, 56, { "p.howmany" }) { l -> services.voice.say(l to "p.howmany") })
@@ -38,6 +47,7 @@ class CountingMiniGame : MiniGame {
             row.add(choicesRow, 0, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
             fun render(round: CountRound) {
+                android.util.Log.i("MatteoFlow", "counting round n=${round.n} choices=${round.choices}")
                 objects.removeAllViews()
                 (1..round.n).toList().chunked(if (round.n > 9) 4 else 3).forEach { items ->
                     val r = ctx.hbox()

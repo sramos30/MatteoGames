@@ -6,23 +6,10 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import com.example.matteogames.framework.loadTwemoji
+import com.example.matteogames.core.Literki
+import com.example.matteogames.framework.Pictures
 
 data class Tile(val row: Int, val col: Int, val bitmap: Bitmap)
-
-/**
- * A built-in puzzle picture. Each carries its name in English / Polish / Portuguese so
- * the puzzle doubles as a first-words vocabulary card. Pictures are emoji rendered onto a
- * colored background (no bundled art), so the app stays asset-free.
- */
-data class SamplePicture(
-    val id: String,
-    val emoji: String,
-    val en: String,
-    val pl: String,
-    val pt: String,
-    val draw: (Context, Int) -> Bitmap,
-)
 
 object PuzzleLogic {
 
@@ -60,27 +47,14 @@ object PuzzleLogic {
         Color.rgb(0xA6, 0xE6, 0xE6),
     )
 
-    /** The picture library: every vocabulary word rendered as an emoji puzzle picture. */
-    val samples: List<SamplePicture> = VOCAB.mapIndexed { i, w ->
-        val bg = EMOJI_BG[i % EMOJI_BG.size]
-        SamplePicture(
-            id = "v$i",
-            emoji = w.emoji,
-            en = w.en,
-            pl = w.pl,
-            pt = w.pt,
-            draw = { ctx, size -> emojiPicture(ctx, w.emoji, bg, size) },
-        )
-    }
-
-    /** Default picture so the game is playable before importing a photo. */
-    fun sample(context: Context, size: Int = 900): Bitmap = samples.first().draw(context, size)
+    fun bgFor(i: Int) = EMOJI_BG[(i % EMOJI_BG.size + EMOJI_BG.size) % EMOJI_BG.size]
 
     /**
      * Renders a puzzle picture: a colored background with the word's picture on top —
-     * the bundled Twemoji image when available, otherwise the system emoji glyph.
+     * the Literki drawing (Noto SVG from xx.images) or the bundled Noto PNG.
      */
-    fun emojiPicture(context: Context, emoji: String, bg: Int, size: Int = 900): Bitmap {
+    fun wordPicture(context: Context, word: Literki.Word, size: Int = 600): Bitmap {
+        val bg = bgFor(word.fx)
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -90,19 +64,12 @@ object PuzzleLogic {
         p.color = Color.argb(70, 255, 255, 255)
         canvas.drawCircle(s / 2f, s / 2f, s * 0.42f, p)
 
-        val tw = loadTwemoji(context, emoji)
+        val tw = Pictures.getNow(context, word, (s * 0.66f).toInt())
         if (tw != null) {
             val target = s * 0.66f
             val left = (s - target) / 2f
             val dst = RectF(left, left, left + target, left + target)
             canvas.drawBitmap(tw, null, dst, Paint(Paint.FILTER_BITMAP_FLAG))
-        } else {
-            val tp = Paint(Paint.ANTI_ALIAS_FLAG)
-            tp.textAlign = Paint.Align.CENTER
-            tp.textSize = s * 0.6f
-            val fm = tp.fontMetrics
-            val baseline = s / 2f - (fm.ascent + fm.descent) / 2f
-            canvas.drawText(emoji, s / 2f, baseline, tp)
         }
         return bmp
     }

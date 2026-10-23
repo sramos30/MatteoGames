@@ -29,8 +29,8 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Fetch Twemoji icons
-        run: python3 scripts/fetch_twemoji.py
+      - name: Fetch Noto Emoji icons
+        run: python3 scripts/fetch_noto.py
 
       - name: Build debug APK
         env:

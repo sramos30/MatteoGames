@@ -19,10 +19,8 @@ import android.widget.GridView
 import android.widget.LinearLayout
 import com.example.matteogames.MainActivity
 import com.example.matteogames.R
-import com.example.matteogames.core.EN
-import com.example.matteogames.core.PL
-import com.example.matteogames.core.PT
-import com.example.matteogames.core.SpeechService
+import com.example.matteogames.core.Literki
+import android.widget.AbsListView
 import com.example.matteogames.framework.*
 import kotlin.math.hypot
 import kotlin.random.Random
@@ -62,21 +60,31 @@ private class BoardView(context: Context) : View(context) {
     private fun layoutPieces() {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0 || h <= 0 || pieces.isEmpty()) return
-        boardSize = minOf(w * 0.92f, h * 0.58f)
+        boardSize = minOf(w * 0.92f, h * 0.55f)
         cell = boardSize / grid
         boardLeft = (w - boardSize) / 2f
         boardTop = h * 0.02f
         if (laidOut) return
         val rnd = Random(42)
         val trayTop = boardTop + boardSize + cell * 0.15f
-        val trayBottom = (h - cell).coerceAtLeast(trayTop)
+        val trayBottom = (h - cell * 1.08f).coerceAtLeast(trayTop)
+        val loose = ArrayList<Piece>()
         pieces.forEach { pc ->
             if (restore?.contains("${pc.row},${pc.col}") == true) {
                 pc.x = boardLeft + pc.col * cell; pc.y = boardTop + pc.row * cell; pc.placed = true
-            } else {
-                pc.x = rnd.nextFloat() * (w - cell).coerceAtLeast(0f)
-                pc.y = trayTop + rnd.nextFloat() * (trayBottom - trayTop)
-            }
+            } else loose.add(pc)
+        }
+        // tray: shuffled tidy grid inside the view; rows overlap only when space is short
+        loose.shuffle(rnd)
+        val perRow = maxOf(1, ((w * 0.96f) / (cell * 1.04f)).toInt())
+        val rows = (loose.size + perRow - 1) / perRow
+        val stepX = if (perRow > 1) (w - cell * 1.1f) / (perRow - 1) else 0f
+        val stepY = if (rows > 1) minOf(cell * 1.04f, (trayBottom - trayTop) / (rows - 1)) else 0f
+        loose.forEachIndexed { i, pc ->
+            val col = i % perRow; val row = i / perRow
+            pc.x = (if (perRow > 1) cell * 0.05f + col * stepX else (w - cell) / 2f) + (row % 2) * cell * 0.08f
+            pc.y = trayTop + row * stepY
+            pc.x = pc.x.coerceIn(0f, (w - cell).coerceAtLeast(0f)); pc.y = pc.y.coerceIn(0f, (h - cell).coerceAtLeast(0f))
         }
         restore = null
         laidOut = true
@@ -145,200 +153,196 @@ private class BoardView(context: Context) : View(context) {
     fun placedCells(): Set<String> = pieces.filter { it.placed }.map { "${it.row},${it.col}" }.toSet()
 }
 
-/** Drag the pieces onto the board. Every picture is also a trilingual word card. */
+/** Drag the pieces onto the board. Every picture is a Literki word (picture + text + voice). */
 class JigsawMiniGame : MiniGame {
     override val info = MiniGameInfo("jigsaw", R.string.game_jigsaw, "🧩", intArrayOf(Pal.SkyBlue, Pal.Aqua))
 
     override fun createView(services: GameServices, onExit: () -> Unit): View {
         val ctx = services.activity
         val settings = services.settings
-        val root = FrameLayout(ctx)
-        root.background = gradientBg(Pal.SkyTop, Pal.SkyBottom)
-        val col = ctx.vbox()
-        root.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-
+        val pics = Literki.wordsWithPicture()
         var grid = settings.gridSize.coerceIn(2, 4)
         var pictureId: String? = null
-        val board = BoardView(ctx)
-
-        // --- top bar ---
-        val bar = ctx.hbox(Gravity.CENTER_VERTICAL)
-        bar.setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), ctx.dp(4))
-        col.add(bar, 0, ViewGroup.LayoutParams.MATCH_PARENT)
-        bar.add(ctx.circleButton(54, arrow = Arrow.LEFT) { onExit() }, 3)
-        bar.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
         val gridButtons = ArrayList<Pair<Int, KidButton>>()
-        val chips = ctx.vbox()
-
-        fun currentPic() = PuzzleLogic.samples.firstOrNull { it.id == pictureId }
-
         lateinit var galleryBtn: KidButton
-        fun speakPic() {
-            currentPic()?.let { pic ->
-                services.speech.speakSequence(listOf(
-                    SpeechService.Utterance(pic.en, EN), SpeechService.Utterance(pic.pl, PL), SpeechService.Utterance(pic.pt, PT)))
-            }
-        }
-        fun refreshChips() {
-            chips.removeAllViews()
-            val pic = currentPic()
-            galleryBtn.emoji = pic?.emoji ?: "🖼️"
-            if (pic != null) {
-                chips.add(ctx.wordChip("🇬🇧", pic.en) { services.speech.speak(pic.en, EN) }, 2)
-                chips.add(ctx.wordChip("🇵🇱", pic.pl) { services.speech.speak(pic.pl, PL) }, 2)
-                chips.add(ctx.wordChip("🇧🇷", pic.pt) { services.speech.speak(pic.pt, PT) }, 2)
-            }
-            gridButtons.forEach { (n, b) ->
-                b.fill = if (n == grid) Pal.Sunshine else 0xFFFFFFFF.toInt()
-                b.labelColor = if (n == grid) 0xFFFFFFFF.toInt() else Pal.Ink
-            }
-        }
-        fun loadPicture(pic: SamplePicture, placed: Set<String>?) {
-            pictureId = pic.id
-            settings.jigsawPicture = pic.id
-            if (placed == null) settings.puzzlePlaced = emptySet()
-            board.setPuzzle(pic.draw(ctx, 600), grid, placed)
-            refreshChips()
-            speakPic()
-        }
+        lateinit var openGallery: () -> Unit
+        lateinit var board: BoardView
+        lateinit var refreshChip: () -> Unit
+        fun currentPic() = pics.firstOrNull { it.id == pictureId }
 
-        listOf(2, 3, 4).forEach { n ->
-            val b = ctx.kidButton(54, { label = "$n×$n"; labelSizeFrac = 0.34f; cornerDp = 16f }) {
-                grid = n
-                settings.gridSize = n
-                settings.puzzlePlaced = emptySet()
-                val src = board.source
-                if (src != null) board.setPuzzle(src, n, null)
-                refreshChips()
+        return ctx.kidScreen(Pal.SkyTop, Pal.SkyBottom, onExit, right = { bar ->
+            listOf(2, 3, 4).forEach { n ->
+                val b = ctx.kidButton(46, { label = "${n}x$n"; labelSizeFrac = 0.34f; cornerDp = 14f }) {
+                    grid = n
+                    settings.gridSize = n
+                    settings.puzzlePlaced = emptySet()
+                    board.source?.let { board.setPuzzle(it, n, null) }
+                    refreshChip()
+                }
+                gridButtons.add(n to b)
+                bar.add(b, 3)
             }
-            gridButtons.add(n to b)
-            bar.add(b, 3)
-        }
-        bar.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
+            bar.add(ctx.flex())
+            galleryBtn = ctx.circleButton(50, "🖼️") { openGallery() }
+            bar.add(galleryBtn, 3)
+            bar.add(ctx.circleButton(50, "📷") {
+                parentalGate(ctx) {
+                    try {
+                        val i = Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+                        @Suppress("DEPRECATION")
+                        ctx.startActivityForResult(i, MainActivity.REQ_PICK_IMAGE)
+                    } catch (e: Exception) { }
+                }
+            }, 3)
+        }) { col, root, _ ->
+            board = BoardView(ctx)
+            // word chip: [language] WORD  (tap = hear it)
+            val chipRow = ctx.hbox(Gravity.CENTER_VERTICAL)
+            chipRow.setPadding(ctx.u(10), 0, ctx.u(10), 0)
+            val word = ctx.kidButton(50, { cornerDp = 18f; labelColor = Pal.Ink; labelSizeFrac = 0.6f }) {
+                services.sayWord(pictureId)
+            }
+            chipRow.add(ctx.langButton(services, 50, { pictureId }) { _ -> refreshChip(); services.sayWord(pictureId) }, 3)
+            chipRow.addView(word, LinearLayout.LayoutParams(0, ctx.u(50), 1f).apply { setMargins(ctx.u(6), 0, 0, 0) })
+            col.add(chipRow, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(60))
+            col.addView(board, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // gallery overlay
-        fun openGallery() {
-            val overlay = FrameLayout(ctx)
-            overlay.background = gradientBg(Pal.SkyTop, Pal.SkyBottom)
-            overlay.isClickable = true
-            val oc = ctx.vbox()
-            overlay.add(oc, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            val head = ctx.hbox(Gravity.CENTER_VERTICAL)
-            head.addView(ctx.label("Pick a picture", 24f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            head.add(ctx.circleButton(56, arrow = Arrow.CLOSE) { root.removeView(overlay) }, 10)
-            oc.add(head, 0, ViewGroup.LayoutParams.MATCH_PARENT)
-            val completed = settings.completedPictures
-            val gv = GridView(ctx)
-            gv.numColumns = GridView.AUTO_FIT
-            gv.columnWidth = ctx.dp(84)
-            gv.stretchMode = GridView.STRETCH_SPACING_UNIFORM
-            gv.verticalSpacing = ctx.dp(10)
-            gv.setPadding(ctx.dp(8), 0, ctx.dp(8), ctx.dp(16))
-            gv.adapter = object : BaseAdapter() {
-                override fun getCount() = PuzzleLogic.samples.size
-                override fun getItem(position: Int) = PuzzleLogic.samples[position]
-                override fun getItemId(position: Int) = position.toLong()
-                override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-                    val v = (convertView as? KidButton) ?: KidButton(ctx).apply {
-                        layoutParams = android.widget.AbsListView.LayoutParams(ctx.dp(84), ctx.dp(84))
-                        emojiFrac = 0.58f; isClickable = false
-                    }
-                    val pic = PuzzleLogic.samples[position]
-                    val done = pic.id in completed
-                    val selected = pic.id == pictureId
-                    v.emoji = pic.emoji
-                    v.fill = when { selected -> Pal.Sunshine; done -> 0xFFE4E4E8.toInt(); else -> 0xFFFFFFFF.toInt() }
-                    v.emojiAlpha = if (done && !selected) 110 else 255
-                    v.badge = if (done) "✓" else null
-                    return v
+            refreshChip = {
+                val pic = currentPic()
+                galleryBtn.picture = pic
+                galleryBtn.emoji = if (pic == null) "🖼️" else null
+                word.label = pic?.let { services.text(it.id) } ?: ""
+                word.visibility = if (pic == null) View.INVISIBLE else View.VISIBLE
+                gridButtons.forEach { (n, b) ->
+                    b.fill = if (n == grid) Pal.Sunshine else 0xFFFFFFFF.toInt()
+                    b.labelColor = if (n == grid) 0xFFFFFFFF.toInt() else Pal.Ink
                 }
             }
-            gv.setOnItemClickListener { _, _, position, _ ->
-                root.removeView(overlay)
-                loadPicture(PuzzleLogic.samples[position], null)
+            fun loadPicture(pic: Literki.Word, placed: Set<String>?) {
+                pictureId = pic.id
+                settings.jigsawPicture = pic.id
+                if (placed == null) settings.puzzlePlaced = emptySet()
+                board.setPuzzle(PuzzleLogic.wordPicture(ctx, pic, 600), grid, placed)
+                refreshChip()
+                services.sayWord(pic.id)
             }
-            oc.addView(gv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-            val idx = PuzzleLogic.samples.indexOfFirst { it.id == pictureId }
-            if (idx > 0) gv.setSelection(idx)
-            root.addView(overlay, FrameLayout.LayoutParams(-1, -1))
-        }
-        galleryBtn = ctx.circleButton(54, "🖼️") { openGallery() }
-        bar.add(galleryBtn, 3)
 
-        // photo import behind a parental gate
-        services.onImagePicked = { uri ->
-            val file = services.imageStore.importFromUri(uri)
-            val bmp = file?.let { services.imageStore.loadBitmap(it) }
-            if (bmp != null) {
-                pictureId = null
-                settings.puzzlePlaced = emptySet()
-                board.setPuzzle(bmp, grid, null)
-                refreshChips()
+            // gallery overlay: columns computed from the real width
+            openGallery = {
+                val overlay = FrameLayout(ctx)
+                overlay.tag = "overlay"   // MainActivity.onBackPressed closes it first
+                overlay.background = gradientBg(Pal.SkyTop, Pal.SkyBottom)
+                overlay.isClickable = true
+                val oc = ctx.vbox()
+                overlay.add(oc, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                val head = ctx.hbox(Gravity.CENTER_VERTICAL)
+                head.setPadding(ctx.u(10), ctx.u(8), ctx.u(10), ctx.u(4))
+                head.add(ctx.emojiView("🖼️", 48))
+                head.add(ctx.flex())
+                head.add(ctx.circleButton(56, arrow = Arrow.CLOSE) { root.removeView(overlay) })
+                oc.add(head, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(70))
+                val completed = settings.completedPictures
+                val gv = GridView(ctx)
+                val cols = 3
+                val cell = ctx.u(104)
+                gv.numColumns = cols
+                gv.stretchMode = GridView.STRETCH_SPACING_UNIFORM
+                gv.columnWidth = cell
+                gv.verticalSpacing = ctx.u(8)
+                gv.setPadding(ctx.u(6), ctx.u(4), ctx.u(6), ctx.u(8))
+                gv.adapter = object : BaseAdapter() {
+                    override fun getCount() = pics.size
+                    override fun getItem(position: Int) = pics[position]
+                    override fun getItemId(position: Int) = position.toLong()
+                    override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+                        val v = (convertView as? KidButton) ?: KidButton(ctx).apply {
+                            isClickable = false; isFocusable = false; emojiFrac = 0.7f
+                            layoutParams = AbsListView.LayoutParams(cell, cell)
+                        }
+                        val pic = pics[position]
+                        val done = completed.contains(pic.id)
+                        val selected = pic.id == pictureId
+                        v.picture = pic
+                        v.fill = when { selected -> Pal.Sunshine; done -> 0xFFE4E4E8.toInt(); else -> 0xFFFFFFFF.toInt() }
+                        v.emojiAlpha = if (done && !selected) 110 else 255
+                        v.check = done
+                        return v
+                    }
+                }
+                gv.setOnItemClickListener { _, _, position, _ ->
+                    root.removeView(overlay)
+                    loadPicture(pics[position], null)
+                }
+                oc.addView(gv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+                val idx = pics.indexOfFirst { it.id == pictureId }
+                if (idx > 0) gv.setSelection(idx)
+                root.addView(overlay, FrameLayout.LayoutParams(-1, -1))
             }
-        }
-        bar.add(ctx.circleButton(54, "📷") {
-            parentalGate(ctx) {
-                try {
-                    val i = Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
-                    @Suppress("DEPRECATION")
-                    ctx.startActivityForResult(i, MainActivity.REQ_PICK_IMAGE)
-                } catch (e: Exception) { }
-            }
-        }, 3)
 
-        col.add(chips, 2, ViewGroup.LayoutParams.MATCH_PARENT)
-        col.addView(board, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-
-        // win overlay
-        val win = ctx.vbox(Gravity.CENTER).apply {
-            setBackgroundColor(0xE6FFFFFF.toInt()); visibility = View.GONE; isClickable = true
-        }
-        val party = ctx.emojiView("🎉", 130)
-        win.add(party)
-        win.add(ctx.label("You did it!", 40f, Pal.Secondary))
-        root.add(win, 0, -1, -1)
-        ObjectAnimator.ofFloat(party, "scaleX", 0.85f, 1.15f).apply { duration = 600; repeatMode = ValueAnimator.REVERSE; repeatCount = ValueAnimator.INFINITE; start() }
-        ObjectAnimator.ofFloat(party, "scaleY", 0.85f, 1.15f).apply { duration = 600; repeatMode = ValueAnimator.REVERSE; repeatCount = ValueAnimator.INFINITE; start() }
-
-        board.onPlaced = { allDone ->
-            services.audio.playCorrect()
-            settings.puzzlePlaced = board.placedCells()
-            if (allDone) {
-                services.celebrate()
-                win.visibility = View.VISIBLE
-                val wasCustom = pictureId == null
-                currentPic()?.let { settings.addCompletedPicture(it.id) }
-                speakPic()
-                root.postDelayed({
-                    win.visibility = View.GONE
-                    if (wasCustom) services.imageStore.clear()
+            // photo import behind a parental gate
+            services.onImagePicked = { uri ->
+                val file = services.imageStore.importFromUri(uri)
+                val bmp = file?.let { services.imageStore.loadBitmap(it) }
+                if (bmp != null) {
+                    pictureId = null
                     settings.puzzlePlaced = emptySet()
-                    val idx = PuzzleLogic.samples.indexOfFirst { it.id == pictureId }
-                    loadPicture(PuzzleLogic.samples[if (idx < 0) 0 else (idx + 1) % PuzzleLogic.samples.size], null)
-                }, 2200)
+                    board.setPuzzle(bmp, grid, null)
+                    refreshChip()
+                }
             }
-        }
 
-        // resume last picture with its placed pieces
-        val pic = PuzzleLogic.samples.firstOrNull { it.id == settings.jigsawPicture } ?: PuzzleLogic.samples.first()
-        loadPicture(pic, settings.puzzlePlaced)
-        return root
+            // win overlay: party picture + Literki's "p.ok" text and voice
+            val win = ctx.vbox(Gravity.CENTER).apply {
+                setBackgroundColor(0xE6FFFFFF.toInt()); visibility = View.GONE; isClickable = true
+            }
+            val party = ctx.emojiView("🎉", 150)
+            win.add(party)
+            val winText = ctx.fitLabel("", 320, 64, Pal.Secondary)
+            win.add(winText)
+            root.add(win, 0, -1, -1)
+            ObjectAnimator.ofFloat(party, "scaleX", 0.85f, 1.15f).apply { duration = 600; repeatMode = ValueAnimator.REVERSE; repeatCount = ValueAnimator.INFINITE; start() }
+            ObjectAnimator.ofFloat(party, "scaleY", 0.85f, 1.15f).apply { duration = 600; repeatMode = ValueAnimator.REVERSE; repeatCount = ValueAnimator.INFINITE; start() }
+
+            board.onPlaced = { allDone ->
+                services.audio.playCorrect()
+                settings.puzzlePlaced = board.placedCells()
+                if (allDone && pics.isNotEmpty()) {
+                    services.celebrate()
+                    winText.label = services.text("p.ok")
+                    win.visibility = View.VISIBLE
+                    val wasCustom = pictureId == null
+                    currentPic()?.let { settings.addCompletedPicture(it.id) }
+                    services.praise(pictureId)
+                    root.postDelayed({
+                        win.visibility = View.GONE
+                        if (wasCustom) services.imageStore.clear()
+                        settings.puzzlePlaced = emptySet()
+                        val idx = pics.indexOfFirst { it.id == pictureId }
+                        loadPicture(pics[if (idx < 0) 0 else (idx + 1) % pics.size], null)
+                    }, 3000)
+                }
+            }
+
+            // resume last picture with its placed pieces
+            val pic = pics.firstOrNull { it.id == settings.jigsawPicture } ?: pics.firstOrNull()
+            if (pic != null) loadPicture(pic, settings.puzzlePlaced) else refreshChip()
+        }
     }
 }
 
 /** Grown-ups only: tap the number seven. */
 private fun parentalGate(ctx: Context, onPass: () -> Unit) {
     val row = ctx.hbox()
-    row.setPadding(ctx.dp(8), ctx.dp(16), ctx.dp(8), ctx.dp(16))
+    row.setPadding(ctx.u(6), ctx.u(14), ctx.u(6), ctx.u(14))
     val dlg = AlertDialog.Builder(ctx)
         .setTitle(R.string.parental_gate_prompt)
         .setView(row)
         .setNegativeButton(R.string.back, null)
         .create()
     listOf(7, 2, 5, 9).shuffled().forEach { d ->
-        row.add(ctx.kidButton(60, { label = "$d"; labelSizeFrac = 0.5f; fill = Pal.SkyBlue; labelColor = 0xFFFFFFFF.toInt() }) {
+        row.add(ctx.kidButton(56, { label = "$d"; labelSizeFrac = 0.5f; fill = Pal.SkyBlue; labelColor = 0xFFFFFFFF.toInt() }) {
             if (d == 7) { dlg.dismiss(); onPass() }
-        }, 5)
+        }, 4)
     }
     dlg.show()
 }

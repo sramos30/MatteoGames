@@ -1,80 +1,66 @@
 package com.example.matteogames.feature.numbers
 
 import android.view.View
+import android.view.ViewGroup
 import com.example.matteogames.R
-import com.example.matteogames.core.EN
-import com.example.matteogames.core.PL
-import com.example.matteogames.core.PT
-import com.example.matteogames.core.Word
-import com.example.matteogames.core.say
 import com.example.matteogames.framework.*
 
-private val NUMBERS = listOf(
-    Word("one", "jeden", "um"),
-    Word("two", "dwa", "dois"),
-    Word("three", "trzy", "três"),
-    Word("four", "cztery", "quatro"),
-    Word("five", "pięć", "cinco"),
-    Word("six", "sześć", "seis"),
-    Word("seven", "siedem", "sete"),
-    Word("eight", "osiem", "oito"),
-    Word("nine", "dziewięć", "nove"),
-    Word("ten", "dziesięć", "dez"),
-)
-
-/** Big number + that many objects; spoken EN → PL → PT. Arrows wait for the audio. */
+/**
+ * Big digit + that many objects, spoken from Literki's digits (d0..d9, "digitos.nome").
+ * Literki has no 10, so the game goes 0..9. Arrows wait for the audio.
+ */
 class NumbersMiniGame : MiniGame {
     override val info = MiniGameInfo("numbers", R.string.game_numbers, "🔢", intArrayOf(Pal.Grape, Pal.SkyBlue))
 
     override fun createView(services: GameServices, onExit: () -> Unit): View {
         val ctx = services.activity
-        val (root, content) = ctx.kidScreen(0xFFEDE7FF.toInt(), 0xFFEAF2FF.toInt(), onExit)
         val objects = listOf("⚽", "⚡", "🐶", "⭐", "🍎")
-        var n = services.settings.numbersCurrent.coerceIn(1, 10)
+        val digits = (services.lang.lang?.digits?.keys ?: (0..9).toSet()).filter { it in 0..9 }.sorted().ifEmpty { listOf(0) }
+        var n = services.settings.numbersCurrent.let { if (it in digits) it else digits.first() }
+        fun id() = "d$n"
+        lateinit var name: KidButton; lateinit var big: KidButton
+        fun refreshName() { name.label = services.text(id()) }
+        return ctx.kidScreen(0xFFEDE7FF.toInt(), 0xFFEAF2FF.toInt(), onExit, right = { bar ->
+            bar.add(ctx.langButton(services, 56, { id() }) { l -> refreshName(); services.voice.say(l to id()) })
+        }) { content, _, _ ->
+            big = ctx.kidButton(150, { labelSizeFrac = 0.62f; cornerDp = 32f }) { services.sayWord(id()) }
+            content.add(big)
+            name = ctx.fitLabel("", 320, 50)
+            content.add(name)
+            val objs = ctx.vbox(android.view.Gravity.CENTER)
+            content.add(objs, 0, ViewGroup.LayoutParams.MATCH_PARENT, ctx.u(170))
+            val arrows = ctx.hbox()
+            content.add(arrows, 6)
 
-        val big = ctx.kidButton(170, { labelSizeFrac = 0.62f; cornerDp = 32f }) { services.speech.say(NUMBERS[n - 1]) }
-        content.add(big)
-        content.add(ctx.spacer(14))
-        val objs = ctx.vbox()
-        content.add(objs)
-        content.add(ctx.spacer(14))
-        val flags = ctx.hbox()
-        flags.add(ctx.circleButton(58, "🇬🇧") { services.speech.speak(NUMBERS[n - 1].en, EN) }, 7)
-        flags.add(ctx.circleButton(58, "🇵🇱") { services.speech.speak(NUMBERS[n - 1].pl, PL) }, 7)
-        flags.add(ctx.circleButton(58, "🇧🇷") { services.speech.speak(NUMBERS[n - 1].pt, PT) }, 7)
-        content.add(flags)
-        content.add(ctx.spacer(14))
-        val arrows = ctx.hbox()
-        content.add(arrows)
-
-        fun render() {
-            big.label = "$n"
-            objs.removeAllViews()
-            val e = objects[(n - 1) % objects.size]
-            (1..n).toList().chunked(5).forEach { items ->
-                val row = ctx.hbox()
-                items.forEach { row.add(ctx.emojiView(e, 44), 4) }
-                objs.add(row)
+            fun render() {
+                big.label = "$n"
+                refreshName()
+                objs.removeAllViews()
+                val e = objects[(n + objects.size - 1) % objects.size]
+                (1..n).toList().chunked(5).forEach { items ->
+                    val row = ctx.hbox()
+                    items.forEach { row.add(ctx.emojiView(e, 46), 4) }
+                    objs.add(row)
+                }
             }
-        }
-        fun go(delta: Int) {
-            if (services.speech.speaking) return
-            val m = n + delta
-            if (m !in 1..10) return
-            n = m
-            services.settings.numbersCurrent = n
+            fun go(delta: Int) {
+                if (services.voice.speaking) return
+                val i = digits.indexOf(n) + delta
+                if (i !in digits.indices) return
+                n = digits[i]
+                services.settings.numbersCurrent = n
+                render()
+                services.sayWord(id())
+            }
+            val prev = ctx.circleButton(84, arrow = Arrow.LEFT) { go(-1) }
+            val next = ctx.circleButton(84, arrow = Arrow.RIGHT) { go(+1) }
+            arrows.add(prev, 14); arrows.add(next, 14)
+            services.voice.onSpeakingChanged = { s ->
+                val f = if (s) Pal.Disabled else 0xFFFFFFFF.toInt()
+                prev.fill = f; next.fill = f
+            }
             render()
-            services.speech.say(NUMBERS[n - 1])
+            services.sayWord(id())
         }
-        val prev = ctx.circleButton(76, arrow = Arrow.LEFT) { go(-1) }
-        val next = ctx.circleButton(76, arrow = Arrow.RIGHT) { go(+1) }
-        arrows.add(prev, 12); arrows.add(next, 12)
-        services.speech.onSpeakingChanged = { s ->
-            val f = if (s) Pal.Disabled else 0xFFFFFFFF.toInt()
-            prev.fill = f; next.fill = f
-        }
-        render()
-        services.speech.say(NUMBERS[n - 1])
-        return root
     }
 }

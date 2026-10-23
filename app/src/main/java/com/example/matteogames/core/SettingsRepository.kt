@@ -33,11 +33,15 @@ class SettingsRepository(context: Context) {
         get() = prefs.getInt("numbers_current", 1)
         set(v) { prefs.edit().putInt("numbers_current", v).apply() }
 
-    val lettersLang: Int get() = prefs.getInt("letters_lang", 0)
-    val lettersPos: Int get() = prefs.getInt("letters_pos", 0)
-    fun setLetters(lang: Int, pos: Int) {
-        prefs.edit().putInt("letters_lang", lang).putInt("letters_pos", pos).apply()
-    }
+    /** Literki language id ("br", "pl"...) chosen with the language button. */
+    var lang: String?
+        get() = prefs.getString("lang", null)
+        set(v) { prefs.edit().putString("lang", v).apply() }
+
+    /** Letter id (cA...) the Letters game is on. */
+    var lettersPos: String
+        get() = prefs.getString("letters_id", "") ?: ""
+        set(v) { prefs.edit().putString("letters_id", v).apply() }
 
     companion object {
         const val DEFAULT_GRID = 2

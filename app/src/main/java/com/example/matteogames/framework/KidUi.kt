@@ -16,7 +16,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.TextView
 
 // Core playful palette (ARGB)
 object Pal {
@@ -35,8 +34,32 @@ object Pal {
     const val Disabled = 0xFFE3E0EC.toInt()
 }
 
-fun Context.dp(v: Number): Int = (v.toFloat() * resources.displayMetrics.density + 0.5f).toInt()
-fun Context.dpf(v: Number): Float = v.toFloat() * resources.displayMetrics.density
+/**
+ * Responsive sizing. Every screen is laid out on a virtual 360 x 640 unit board; the real
+ * pixels per unit come from the size measured in onSizeChanged (see [sizedScreen]), so the
+ * layout always fits whatever the window gives us (status bar, nav bar, Fire Phone...).
+ */
+object Ui { @JvmStatic var u = 2f }
+fun Context.u(v: Number): Int = (v.toFloat() * Ui.u + 0.5f).toInt()
+fun Context.uf(v: Number): Float = v.toFloat() * Ui.u
+
+/** Frame that builds its content only once its real size is known, and rebuilds on change. */
+class SizedScreen(context: Context, private val build: (FrameLayout, Int, Int) -> Unit) : FrameLayout(context) {
+    private var builtW = 0; private var builtH = 0
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w <= 0 || h <= 0 || (w == builtW && h == builtH)) return
+        builtW = w; builtH = h
+        post {
+            removeAllViews()
+            Ui.u = minOf(w / 360f, h / 640f)
+            build(this, w, h)
+        }
+    }
+}
+
+fun Context.sizedScreen(top: Int, bottom: Int, build: (FrameLayout, Int, Int) -> Unit): FrameLayout =
+    SizedScreen(this, build).apply { background = gradientBg(top, bottom) }
 
 fun gradientBg(top: Int, bottom: Int) =
     GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom))
@@ -45,7 +68,7 @@ fun gradientBg(top: Int, bottom: Int) =
 enum class Arrow { LEFT, RIGHT, CLOSE }
 
 /**
- * Big, rounded, chunky button drawn on a Canvas, sized for small fingers. Shows a Twemoji
+ * Big, rounded, chunky button drawn on a Canvas, sized for small fingers. Shows a Noto
  * picture, a text label, an arrow, or a custom drawing. Springs when pressed.
  */
 open class KidButton(context: Context) : View(context) {
@@ -54,6 +77,11 @@ open class KidButton(context: Context) : View(context) {
     var circle = false
     var cornerDp = 22f
     var emoji: String? = null; set(v) { field = v; invalidate() }
+    /** Literki word drawn from its Noto SVG (xx.images); falls back to the bundled Noto PNG. */
+    var picture: com.example.matteogames.core.Literki.Word? = null; set(v) { field = v; invalidate() }
+    /** Plain = no background/shadow (used for auto-fitting text labels). */
+    var plain = false
+    var check = false; set(v) { field = v; invalidate() }
     var emojiFrac = 0.6f
     var emojiAlpha = 255; set(v) { field = v; invalidate() }
     var label: String? = null; set(v) { field = v; invalidate() }
@@ -69,7 +97,7 @@ open class KidButton(context: Context) : View(context) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bp = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val r = RectF()
-    private val shadow = context.dpf(4)
+    private val shadow get() = if (plain) 0f else minOf(width, height) * 0.04f
 
     init { isClickable = true }
 
@@ -84,20 +112,22 @@ open class KidButton(context: Context) : View(context) {
 
     override fun onDraw(c: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
-        val rad = if (circle) minOf(w, h) / 2f else context.dpf(cornerDp)
-        // shadow
+        val rad = if (circle) minOf(w, h) / 2f else minOf(context.uf(cornerDp), minOf(w, h) / 2f)
         p.shader = null
-        p.color = 0x22000000
-        r.set(shadow * 0.3f, shadow, w - shadow * 0.3f, h)
-        c.drawRoundRect(r, rad, rad, p)
-        r.set(0f, 0f, w - 0f, h - shadow)
-        val g = gradient
-        if (g != null) {
-            p.shader = LinearGradient(0f, 0f, 0f, r.bottom, g[0], g[1], Shader.TileMode.CLAMP)
-            p.color = Color.WHITE
-        } else p.color = fill
-        c.drawRoundRect(r, rad, rad, p)
-        p.shader = null
+        r.set(0f, 0f, w, h - shadow)
+        if (!plain) {
+            p.color = 0x22000000
+            r.set(shadow * 0.3f, shadow, w - shadow * 0.3f, h)
+            c.drawRoundRect(r, rad, rad, p)
+            r.set(0f, 0f, w - 0f, h - shadow)
+            val g = gradient
+            if (g != null) {
+                p.shader = LinearGradient(0f, 0f, 0f, r.bottom, g[0], g[1], Shader.TileMode.CLAMP)
+                p.color = Color.WHITE
+            } else p.color = fill
+            c.drawRoundRect(r, rad, rad, p)
+            p.shader = null
+        }
         val cx = r.centerX(); val cy = r.centerY()
         val side = minOf(r.width(), r.height())
 
@@ -121,22 +151,22 @@ open class KidButton(context: Context) : View(context) {
 
         val cap = caption
         val emojiCy = if (cap != null) r.top + r.height() * 0.42f else cy
-        emoji?.let { e ->
-            val bmp = loadTwemoji(context, e)
-            val es = side * emojiFrac
-            if (bmp != null) {
-                bp.alpha = emojiAlpha
-                c.drawBitmap(bmp, null, RectF(cx - es / 2, emojiCy - es / 2, cx + es / 2, emojiCy + es / 2), bp)
-            } else {
-                p.color = Pal.Ink; p.textAlign = Paint.Align.CENTER; p.textSize = es * 0.9f
-                c.drawText(e, cx, emojiCy - (p.descent() + p.ascent()) / 2, p)
-            }
+        val es = (if (cap != null) minOf(r.width(), r.height() * 0.62f) else side) * emojiFrac
+        val pic = picture
+        val bmp = when {
+            pic != null -> Pictures.get(context, pic, 256) { postInvalidate() }
+            emoji != null -> loadEmoji(context, emoji!!)
+            else -> null
+        }
+        if (bmp != null) {   // never fall back to a font glyph: FireOS draws emoji blank
+            bp.alpha = emojiAlpha
+            c.drawBitmap(bmp, null, RectF(cx - es / 2, emojiCy - es / 2, cx + es / 2, emojiCy + es / 2), bp)
         }
         label?.let { t ->
             p.color = labelColor
             p.typeface = Typeface.DEFAULT_BOLD
             p.textAlign = Paint.Align.CENTER
-            p.textSize = if (labelSizePx > 0) labelSizePx else side * labelSizeFrac
+            p.textSize = if (labelSizePx > 0) labelSizePx else (if (plain) r.height() else side) * labelSizeFrac
             // shrink to fit
             val maxW = r.width() * 0.88f
             while (p.measureText(t) > maxW && p.textSize > 8f) p.textSize *= 0.92f
@@ -146,10 +176,17 @@ open class KidButton(context: Context) : View(context) {
             p.color = Color.WHITE
             p.typeface = Typeface.DEFAULT_BOLD
             p.textAlign = Paint.Align.CENTER
-            p.textSize = context.dpf(20)
+            p.textSize = r.height() * 0.15f
             val maxW = r.width() * 0.9f
             while (p.measureText(cap) > maxW && p.textSize > 8f) p.textSize *= 0.92f
             c.drawText(cap, cx, r.top + r.height() * 0.86f, p)
+        }
+        if (check) {   // drawn tick (no font glyph)
+            p.color = 0xFF2E7D46.toInt(); p.style = Paint.Style.STROKE; p.strokeWidth = side * 0.07f
+            p.strokeCap = Paint.Cap.ROUND; p.strokeJoin = Paint.Join.ROUND
+            val bx = r.right - side * 0.24f; val by = r.top + side * 0.1f; val s = side * 0.16f
+            val path = Path(); path.moveTo(bx, by + s * 0.55f); path.lineTo(bx + s * 0.38f, by + s * 0.9f); path.lineTo(bx + s, by)
+            c.drawPath(path, p); p.style = Paint.Style.FILL
         }
         badge?.let { b ->
             p.color = 0xFF2E7D46.toInt(); p.typeface = Typeface.DEFAULT_BOLD
@@ -159,17 +196,17 @@ open class KidButton(context: Context) : View(context) {
     }
 }
 
-// --- tiny layout helpers ---
+// --- tiny layout helpers (sizes in units, see [Ui]) ---
 
-fun Context.kidButton(sizeDp: Int, block: KidButton.() -> Unit = {}, onTap: () -> Unit): KidButton =
+fun Context.kidButton(sizeU: Int, block: KidButton.() -> Unit = {}, onTap: () -> Unit): KidButton =
     KidButton(this).apply {
-        layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
+        layoutParams = LinearLayout.LayoutParams(u(sizeU), u(sizeU))
         block()
         setOnClickListener { onTap() }
     }
 
-fun Context.circleButton(sizeDp: Int, emoji: String? = null, arrow: Arrow? = null, fill: Int = Color.WHITE, onTap: () -> Unit) =
-    kidButton(sizeDp, {
+fun Context.circleButton(sizeU: Int, emoji: String? = null, arrow: Arrow? = null, fill: Int = Color.WHITE, onTap: () -> Unit) =
+    kidButton(sizeU, {
         circle = true; this.emoji = emoji; this.arrow = arrow; this.fill = fill; emojiFrac = 0.55f
     }, onTap)
 
@@ -181,15 +218,14 @@ fun Context.hbox(gravity: Int = Gravity.CENTER): LinearLayout = LinearLayout(thi
     orientation = LinearLayout.HORIZONTAL; this.gravity = gravity
 }
 
-/** Adds [child] with an optional margin (dp) around it. */
-fun ViewGroup.add(child: View, marginDp: Int = 0, w: Int = -3, h: Int = -3): View {
-    val ctx = context
-    val m = ctx.dp(marginDp)
+/** Adds [child] with an optional margin (units) around it. */
+fun ViewGroup.add(child: View, marginU: Int = 0, w: Int = -3, h: Int = -3): View {
+    val m = context.u(marginU)
     val old = child.layoutParams
     val lw = if (w != -3) w else old?.width ?: ViewGroup.LayoutParams.WRAP_CONTENT
     val lh = if (h != -3) h else old?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT
     val lp: ViewGroup.LayoutParams = when (this) {
-        is LinearLayout -> LinearLayout.LayoutParams(lw, lh).apply { setMargins(m, m, m, m) }
+        is LinearLayout -> LinearLayout.LayoutParams(lw, lh).apply { setMargins(m, m, m, m); (old as? LinearLayout.LayoutParams)?.let { weight = it.weight; gravity = it.gravity } }
         is FrameLayout -> FrameLayout.LayoutParams(lw, lh).apply { setMargins(m, m, m, m) }
         else -> ViewGroup.MarginLayoutParams(lw, lh).apply { setMargins(m, m, m, m) }
     }
@@ -197,57 +233,44 @@ fun ViewGroup.add(child: View, marginDp: Int = 0, w: Int = -3, h: Int = -3): Vie
     return child
 }
 
-fun Context.spacer(hDp: Int): View = View(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(hDp)) }
+fun Context.spacer(hU: Int): View = View(this).apply { layoutParams = LinearLayout.LayoutParams(1, u(hU)) }
 
-fun Context.label(text: String, sizeSp: Float, color: Int = Pal.Ink, bold: Boolean = true): TextView =
-    TextView(this).apply {
-        this.text = text; textSize = sizeSp; setTextColor(color); gravity = Gravity.CENTER
-        if (bold) typeface = Typeface.DEFAULT_BOLD
-    }
+/** Flexible empty space inside a LinearLayout. */
+fun Context.flex(): View = View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 0, 1f) }
 
-/** Simple Twemoji image view. */
-class EmojiView(context: Context, emoji: String) : KidButton(context) {
-    init {
-        this.emoji = emoji; emojiFrac = 1f; isClickable = false
-    }
-    override fun onDraw(c: Canvas) {
-        val e = emoji ?: return
-        val bmp = loadTwemoji(context, e) ?: return
-        c.drawBitmap(bmp, null, RectF(0f, 0f, width.toFloat(), height.toFloat()), Paint(Paint.FILTER_BITMAP_FLAG))
-    }
+/** Auto-fitting one-line text in a fixed box (w x h units; w = -1 means match parent). */
+fun Context.fitLabel(text: String, wU: Int, hU: Int, color: Int = Pal.Ink): KidButton = KidButton(this).apply {
+    plain = true; isClickable = false; label = text; labelColor = color; labelSizeFrac = 0.8f
+    layoutParams = LinearLayout.LayoutParams(if (wU < 0) ViewGroup.LayoutParams.MATCH_PARENT else u(wU), u(hU))
+}
+
+/** Picture-only view (bundled Noto PNG or a Literki word drawing). */
+class EmojiView(context: Context, emoji: String?) : KidButton(context) {
+    init { this.emoji = emoji; emojiFrac = 1f; plain = true; isClickable = false }
     override fun onTouchEvent(event: MotionEvent) = false
 }
 
-fun Context.emojiView(emoji: String, sizeDp: Int) = EmojiView(this, emoji).apply {
-    layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
-}
-
-/** Flag + word chip that speaks when tapped. */
-fun Context.wordChip(flag: String, word: String, onTap: () -> Unit): View {
-    val row = hbox().apply {
-        background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dpf(18) }
-        setPadding(dp(14), dp(6), dp(14), dp(6))
-        isClickable = true
-        setOnClickListener { onTap() }
-    }
-    row.add(emojiView(flag, 26))
-    row.add(label("  $word", 20f), 0)
-    return row
+fun Context.emojiView(emoji: String?, sizeU: Int) = EmojiView(this, emoji).apply {
+    layoutParams = LinearLayout.LayoutParams(u(sizeU), u(sizeU))
 }
 
 /**
- * Standard page scaffold: gradient background + round back button top-left.
- * Returns (root, contentColumn). The content column fills the rest and centers children.
+ * Standard page scaffold, built once the real size is known: gradient background, a top bar
+ * (back button left, optional [right] views) and a content column that fills the rest.
+ * [build] receives the content column and its height in units.
  */
-fun Context.kidScreen(top: Int, bottom: Int, onExit: () -> Unit): Pair<FrameLayout, LinearLayout> {
-    val root = FrameLayout(this)
-    root.background = gradientBg(top, bottom)
-    val col = vbox()
-    root.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-    val bar = hbox(Gravity.START or Gravity.CENTER_VERTICAL)
-    bar.add(circleButton(60, arrow = Arrow.LEFT) { onExit() }, 12)
-    col.add(bar, 0, ViewGroup.LayoutParams.MATCH_PARENT)
-    val content = vbox(Gravity.CENTER)
-    col.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    return root to content
-}
+fun Context.kidScreen(top: Int, bottom: Int, onExit: () -> Unit, right: (LinearLayout) -> Unit = {},
+                      build: (content: LinearLayout, root: FrameLayout, hU: Float) -> Unit): FrameLayout =
+    sizedScreen(top, bottom) { root, _, h ->
+        val col = vbox()
+        root.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        val bar = hbox(Gravity.CENTER_VERTICAL)
+        bar.setPadding(u(10), u(8), u(10), u(4))
+        bar.add(circleButton(56, arrow = Arrow.LEFT) { onExit() })
+        bar.add(flex())
+        right(bar)
+        col.add(bar, 0, ViewGroup.LayoutParams.MATCH_PARENT, u(70))
+        val content = vbox(Gravity.CENTER)
+        col.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        build(content, root, h / Ui.u - 70f)
+    }

@@ -5,44 +5,66 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
-import android.widget.ScrollView
 
-/** Home: title + a 2-column grid of big game cards (vertical scroll). */
-fun homeView(context: Context, onSelect: (String) -> Unit): View = with(context) {
+/** Home: title + language button + a 2x4 grid of game cards that always fits the screen. */
+fun homeView(services: GameServices, onSelect: (String) -> Unit): View = with(services.activity) {
     val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
-    val scroll = ScrollView(this)
-    scroll.background = gradientBg(Pal.SkyTop, Pal.SkyBottom)
-    val col = vbox()
-    col.setPadding(dp(12), dp(16), dp(12), dp(16))
-    scroll.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT)
+    sizedScreen(Pal.SkyTop, Pal.SkyBottom) { root, _, _ ->
+        val col = vbox()
+        col.setPadding(u(8), u(8), u(8), u(4))
+        root.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
-    col.add(emojiView("🌈", 64))
-    col.add(label("Matteo Games", 34f, Pal.Ink))
-    col.add(spacer(12))
+        val head = hbox(Gravity.CENTER_VERTICAL)
+        head.add(emojiView("🌈", 56), 4)
+        head.addView(fitLabel("Matteo Games", -1, 52), LinearLayout.LayoutParams(0, u(52), 1f))
+        lateinit var lb: KidButton
+        lb = langButton(services, 56, { "p.lang" }) { l -> services.voice.say(l to "p.lang") }
+        head.add(lb, 4)
+        col.add(head, 0, ViewGroup.LayoutParams.MATCH_PARENT, u(72))
 
-    val games = MiniGameRegistry.games
-    val screenW = resources.displayMetrics.widthPixels / resources.displayMetrics.density
-    val cardW = ((screenW - 24 - 4 * 8) / 2).toInt().coerceAtMost(220)
-    games.chunked(2).forEach { pair ->
-        val row = hbox()
-        pair.forEach { g ->
-            val card = KidButton(this).apply {
-                gradient = g.info.gradient
-                cornerDp = 28f
-                emoji = g.info.emoji
-                emojiFrac = 0.5f
-                caption = getString(g.info.titleRes)
-                setOnClickListener { onSelect(g.info.id) }
+        val grid = vbox()
+        col.addView(grid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        MiniGameRegistry.games.chunked(2).forEach { pair ->
+            val row = hbox()
+            grid.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            pair.forEach { g ->
+                val card = KidButton(this).apply {
+                    gradient = g.info.gradient
+                    cornerDp = 24f
+                    emoji = g.info.emoji
+                    emojiFrac = 0.62f
+                    caption = getString(g.info.titleRes)
+                    setOnClickListener { onSelect(g.info.id) }
+                }
+                row.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                    setMargins(u(6), u(6), u(6), u(6))
+                })
             }
-            row.addView(card, LinearLayout.LayoutParams(dp(cardW), dp(cardW * 1.15f)).apply {
-                setMargins(dp(8), dp(8), dp(8), dp(8))
-            })
         }
-        col.add(row)
+        col.add(fitLabel("v$version - Literki - Noto Emoji (Apache 2.0)", -1, 18, 0x88000000.toInt()))
     }
-    col.add(spacer(16))
-    col.add(label("Matteo Games  v$version  ·  Emoji: Twemoji CC-BY 4.0", 12f, 0x66000000, bold = false).apply {
-        gravity = Gravity.CENTER
-    })
-    scroll
+}
+
+/** Friendly full-screen message (loading, Literki missing, permission denied). */
+fun messageView(ctx: Context, emoji: String, title: String, msg: String, onRetry: (() -> Unit)?): View = with(ctx) {
+    sizedScreen(Pal.SkyTop, Pal.SkyBottom) { root, _, _ ->
+        val col = vbox(Gravity.CENTER)
+        col.setPadding(u(20), u(20), u(20), u(20))
+        root.add(col, 0, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        col.add(emojiView(emoji, 150))
+        col.add(fitLabel(title, -1, 64))
+        // message may be long: split into lines that each auto-fit
+        wrap(msg, 26).forEach { col.add(fitLabel(it, -1, 34, Pal.Ink)) }
+        if (onRetry != null) {
+            col.add(spacer(20))
+            col.add(circleButton(96, arrow = Arrow.RIGHT, fill = Pal.Sunshine) { onRetry() })
+        }
+    }
+}
+
+private fun wrap(s: String, max: Int): List<String> {
+    val out = ArrayList<String>(); var cur = ""
+    s.split(' ').forEach { w -> if (cur.isNotEmpty() && cur.length + 1 + w.length > max) { out.add(cur); cur = w } else cur = if (cur.isEmpty()) w else "$cur $w" }
+    if (cur.isNotEmpty()) out.add(cur)
+    return out
 }

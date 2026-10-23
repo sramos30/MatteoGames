@@ -4,9 +4,12 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import com.example.matteogames.core.Literki
 import com.example.matteogames.framework.GameServices
 import com.example.matteogames.framework.MiniGameRegistry
+import com.example.matteogames.framework.Pictures
 import com.example.matteogames.framework.homeView
+import com.example.matteogames.framework.messageView
 
 /** Single plain Activity (no AndroidX) — swaps full-screen Views for Home and each game. */
 class MainActivity : Activity() {
@@ -17,19 +20,45 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         services = GameServices(this)
-        showHome()
+        loadCatalog()
+    }
+
+    /** Literki's provider is read off the UI thread; meanwhile a friendly "loading" page. */
+    private fun loadCatalog() {
+        inGame = false
+        setContentView(messageView(this, "🌈", "Matteo Games", "...", null))
+        Thread {
+            val st = Literki.load(applicationContext)
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                if (st == Literki.Status.OK) {
+                    Pictures.preferLang = services.lang.lang?.id
+                    showHome()
+                } else showProblem(st)
+            }
+        }.start()
+    }
+
+    private fun showProblem(st: Literki.Status) {
+        val (pic, msg) = when (st) {
+            Literki.Status.NO_LITERKI -> "📦" to "Instale o Literki e os pacotes de língua para jogar."
+            Literki.Status.NO_PERMISSION -> "🔑" to "Reinstale o Matteo Games depois do Literki para ele poder ler os pacotes."
+            else -> "📦" to "Nenhum pacote de língua instalado no Literki."
+        }
+        setContentView(messageView(this, pic, "Ops!", msg) { loadCatalog() })
     }
 
     private fun showHome() {
-        services.speech.stop()
-        services.speech.onSpeakingChanged = null
+        services.voice.stop()
+        services.voice.onSpeakingChanged = null
         services.onImagePicked = null
         inGame = false
-        setContentView(homeView(this) { id -> showGame(id) })
+        setContentView(homeView(services) { id -> showGame(id) })
     }
 
     private fun showGame(id: String) {
-        services.speech.stop()
+        services.voice.stop()
+        services.voice.onSpeakingChanged = null
         inGame = true
         val view: View = MiniGameRegistry.byId(id).createView(services) { showHome() }
         setContentView(view)
@@ -37,16 +66,19 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (inGame) showHome() else super.onBackPressed()
+        // an open overlay (e.g. the puzzle gallery) closes before the game does
+        val overlay = window.decorView.findViewWithTag<View>("overlay")
+        if (overlay != null) (overlay.parent as? android.view.ViewGroup)?.removeView(overlay)
+        else if (inGame) showHome() else super.onBackPressed()
     }
 
     override fun onStop() {
         super.onStop()
-        services.speech.stop()
+        services.voice.stop()
     }
 
     override fun onDestroy() {
-        services.speech.shutdown()
+        services.voice.shutdown()
         super.onDestroy()
     }
 

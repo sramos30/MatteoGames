@@ -10,5 +10,6 @@
 .cxx
 out/
 
-# Twemoji images are downloaded at build time, not committed
+# Noto Emoji PNGs are downloaded at build time (scripts/fetch_noto.py), not committed
+app/src/main/assets/noto/
 app/src/main/assets/twemoji/

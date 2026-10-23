@@ -65,4 +65,6 @@ android {
 
 dependencies {
     // Intentionally no AndroidX: everything is framework API available on Android 4.4.
+    // AndroidSVG (Apache 2.0, no dependencies): renders the Noto SVGs from Literki's xx.images.
+    implementation("com.caverock:androidsvg-aar:1.4")
 }

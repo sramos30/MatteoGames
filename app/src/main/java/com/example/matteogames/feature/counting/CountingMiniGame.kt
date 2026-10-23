@@ -52,8 +52,7 @@ class CountingMiniGame : MiniGame {
                         if (choice == round.n) {
                             busy = true
                             services.audio.playCorrect()
-                            services.praise(numId(round.n))
-                            root.postDelayed({ render(newRound(max)); busy = false; ask() }, 2600)
+                            services.praise(numId(round.n)) { render(newRound(max)); busy = false; services.roundStart("counting"); ask() }
                         } else {
                             ObjectAnimator.ofFloat(b, "translationX", 0f, -14f, 14f, -8f, 8f, 0f).setDuration(350).start()
                             services.tryAgain()

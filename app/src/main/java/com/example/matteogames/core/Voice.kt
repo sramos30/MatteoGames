@@ -6,6 +6,7 @@ import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 
 /**
@@ -34,36 +35,70 @@ class Voice(context: Context) {
         tts = try { TextToSpeech(ctx) { s -> ttsReady = s == TextToSpeech.SUCCESS } } catch (e: Exception) { null }
     }
 
-    /** Play items in order (each: language + item id such as cA, d3, w003, p.ok). Interrupts. */
-    fun say(vararg items: Pair<Literki.Lang?, String?>) {
+    private var onDone: (() -> Unit)? = null
+    /** A protected sequence (praise) can't be cut by an ordinary say(); only by another protected one or stop(). */
+    private var protectedSeq = false
+    private var step = -1   // item currently playing; each item advances only once
+    private val timeout = Runnable { val g = gen; val i = step; Log.w(Literki.TAG, "voice timeout item $i"); advance(g, i) }
+
+    /**
+     * Play items in order (each: language + item id such as cA, d3, w003, p.ok). Interrupts, except a
+     * running protected sequence. [onDone] runs on the main thread once the whole sequence has played
+     * (or failed / timed out), never when it was cut by stop() or another say().
+     */
+    fun say(vararg items: Pair<Literki.Lang?, String?>, protect: Boolean = false, onDone: (() -> Unit)? = null) {
+        if (protectedSeq && !protect && speaking) { Log.i(Literki.TAG, "voice: kept praise, dropped ${items.map { it.second }}"); return }
         stop()
         queue = items.mapNotNull { (l, id) -> if (l != null && id != null) l to id else null }
         val g = ++gen
+        this.onDone = onDone
+        protectedSeq = protect
         startedAt = System.currentTimeMillis()
         speaking = queue.isNotEmpty()
         next(g, 0)
     }
 
+    private fun advance(g: Int, i: Int) {
+        if (g != gen || i != step) return
+        step = -1
+        main.removeCallbacks(timeout)
+        next(g, i + 1)
+    }
+
+    private fun armTimeout(ms: Long) { main.removeCallbacks(timeout); main.postDelayed(timeout, ms) }
+
     private fun next(g: Int, i: Int) {
         if (g != gen) return
-        if (i >= queue.size) { speaking = false; return }
+        if (i >= queue.size) {
+            speaking = false; protectedSeq = false
+            val d = onDone; onDone = null
+            if (d != null) { Log.i(Literki.TAG, "voice done ${queue.map { it.second }}"); main.post(d) }
+            return
+        }
         val (lang, id) = queue[i]
+        step = i
         startedAt = System.currentTimeMillis()
+        armTimeout(4000)   // until we know the real length
         val snd = lang.sounds[id]
         if (snd != null && playMp3(g, i, snd, lang.id, id)) return
-        // last resort: TTS, never blocking
+        // last resort: TTS (done via UtteranceProgressListener, or the timeout)
         val text = lang.text(id)
         val t = tts
         if (text != null && t != null && ttsReady) {
             try {
                 t.language = lang.locale
-                @Suppress("DEPRECATION") t.speak(text, TextToSpeech.QUEUE_FLUSH, null)
+                t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(u: String?) {}
+                    override fun onDone(u: String?) { main.post { if (u == "$g:$i") advance(g, i) } }
+                    @Deprecated("Deprecated in Java") override fun onError(u: String?) { main.post { if (u == "$g:$i") advance(g, i) } }
+                })
+                @Suppress("DEPRECATION") t.speak(text, TextToSpeech.QUEUE_FLUSH, hashMapOf(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID to "$g:$i"))
                 Log.i(Literki.TAG, "TTS fallback ${lang.id}/$id")
-            } catch (e: Exception) { }
-            main.postDelayed({ next(g, i + 1) }, 250L + text.length * 90L)
+                armTimeout(minOf(4000L, 1000L + text.length * 120L))
+            } catch (e: Exception) { advance(g, i) }
         } else {
             ensureTts()
-            next(g, i + 1)
+            advance(g, i)
         }
     }
 
@@ -77,10 +112,11 @@ class Voice(context: Context) {
                 try { pfd.close() } catch (e: Exception) { }
                 if (g != gen) { it.release(); return@setOnPreparedListener }
                 it.start()
+                if (g == gen && step == i) armTimeout((if (it.duration > 0) it.duration.toLong() else 3000L) + 1000L)
                 Log.i(Literki.TAG, "MediaPlayer start $langId/$id <- ${snd.pkg}/${snd.path}")
             }
-            mp.setOnCompletionListener { it.release(); if (player === it) player = null; next(g, i + 1) }
-            mp.setOnErrorListener { m, _, _ -> m.release(); if (player === m) player = null; next(g, i + 1); true }
+            mp.setOnCompletionListener { m -> main.post { m.release(); if (player === m) player = null; advance(g, i) } }
+            mp.setOnErrorListener { m, _, _ -> main.post { m.release(); if (player === m) player = null; advance(g, i) }; true }
             player = mp
             mp.prepareAsync()
             true
@@ -92,6 +128,7 @@ class Voice(context: Context) {
 
     fun stop() {
         gen++
+        main.removeCallbacks(timeout); step = -1; onDone = null; protectedSeq = false
         player?.let { try { it.stop() } catch (e: Exception) { }; it.release() }
         player = null
         try { tts?.stop() } catch (e: Exception) { }

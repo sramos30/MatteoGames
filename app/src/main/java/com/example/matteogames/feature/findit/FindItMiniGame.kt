@@ -47,11 +47,10 @@ class FindItMiniGame : MiniGame {
                         if (index == r.correctIndex) {
                             busy = true
                             services.audio.playCorrect()
-                            services.praise()
-                            root.postDelayed({
-                                round = newRound(); show(); busy = false
+                            services.praise {
+                                round = newRound(); show(); busy = false; services.roundStart("findit")
                                 services.voice.say(services.lang.lang to "p.find", services.lang.lang to round?.target?.id)
-                            }, 1800)
+                            }
                         } else {
                             ObjectAnimator.ofFloat(b, "translationX", 0f, -14f, 14f, -8f, 8f, 0f).setDuration(350).start()
                             services.voice.say(services.lang.lang to "p.try", services.lang.lang to r.target.id)

@@ -336,14 +336,14 @@ class JigsawMiniGame : MiniGame {
                     win.visibility = View.VISIBLE
                     val wasCustom = pictureId == null
                     currentPic()?.let { settings.addCompletedPicture(it.id) }
-                    services.win(pictureId)
-                    root.postDelayed({
+                    services.win(pictureId) {
                         win.visibility = View.GONE
                         if (wasCustom) services.imageStore.clear()
                         settings.puzzlePlaced = emptySet()
                         val idx = pics.indexOfFirst { it.id == pictureId }
                         loadPicture(pics[if (idx < 0) 0 else (idx + 1) % pics.size], null)
-                    }, 3000)
+                        services.roundStart("jigsaw")
+                    }
                 }
             }
 

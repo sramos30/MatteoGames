@@ -104,8 +104,7 @@ class ColorsShapesMiniGame : MiniGame {
                         if (index == round.correctIndex) {
                             busy = true
                             services.audio.playCorrect()
-                            services.praise(round.nameId)
-                            root.postDelayed({ round = newRound(); bind(); busy = false; ask() }, 2200)
+                            services.praise(round.nameId) { round = newRound(); bind(); busy = false; services.roundStart("colors"); ask() }
                         } else {
                             ObjectAnimator.ofFloat(b, "translationX", 0f, -14f, 14f, -8f, 8f, 0f).setDuration(350).start()
                             services.voice.say(services.lang.lang to "p.try", services.lang.lang to round.nameId)

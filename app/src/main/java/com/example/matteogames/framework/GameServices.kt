@@ -21,9 +21,27 @@ class GameServices(val activity: Activity) {
     fun celebrate() = audio.playWin()
 
     /** Literki's prompts as praise / try again, in the current language. */
-    fun praise(vararg before: String?) { val l = lang.lang; voice.say(*before.map { l to it }.toTypedArray(), l to "p.ok") }
+    fun praise(vararg before: String?, then: (() -> Unit)? = null) = praiseSeq(before, "p.ok", then)
     /** End of a whole game (puzzle done, all pairs found): optional item, then "p.win". */
-    fun win(vararg before: String?) { val l = lang.lang; voice.say(*before.map { l to it }.toTypedArray(), l to "p.win") }
+    fun win(vararg before: String?, then: (() -> Unit)? = null) = praiseSeq(before, "p.win", then)
+
+    /**
+     * Praise can't be cut, and [then] (next round) runs only after the whole sequence has played,
+     * plus a short pause. Games keep input blocked (busy) until then.
+     */
+    private fun praiseSeq(before: Array<out String?>, last: String, then: (() -> Unit)?) {
+        val l = lang.lang
+        val t0 = System.currentTimeMillis()
+        voice.say(*before.map { l to it }.toTypedArray(), l to last, protect = true) {
+            activity.window.decorView.postDelayed({
+                if (activity.isFinishing) return@postDelayed
+                android.util.Log.i("MatteoFlow", "praise done (${System.currentTimeMillis() - t0} ms) -> next round")
+                then?.invoke()
+            }, 400)
+        }
+    }
+    /** Logged when a game shows a new round (compare with "praise done" in logcat). */
+    fun roundStart(game: String) = android.util.Log.i("MatteoFlow", "round start $game")
     /** Say Literki's spoken title of a game (p.game.*). */
     fun sayTitle(gameId: String) { voice.say(lang.lang to titlePrompt(gameId)) }
     fun tryAgain() { voice.say(lang.lang to "p.try") }

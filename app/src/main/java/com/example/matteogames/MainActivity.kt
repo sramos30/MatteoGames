@@ -21,6 +21,33 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         services = GameServices(this)
         loadCatalog()
+        immersive()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        immersive()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) immersive()
+    }
+
+    override fun setContentView(view: View?) {
+        super.setContentView(view)
+        immersive()
+    }
+
+    /** Same full screen as Literki: no status bar, no Android navigation buttons (sticky immersive). */
+    @Suppress("DEPRECATION")
+    private fun immersive() {
+        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
     }
 
     /** Literki's provider is read off the UI thread; meanwhile a friendly "loading" page. */
